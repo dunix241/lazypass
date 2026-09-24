@@ -1,0 +1,20 @@
+# Replace pkgver and both checksums for every release.
+pkgname=lazypass-bin
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Terminal password generator with TUI and CLI modes'
+arch=('x86_64' 'aarch64')
+url='https://github.com/dunix241/lazypass'
+license=('MIT')
+depends=('glibc')
+provides=('lazypass')
+conflicts=('lazypass')
+source_x86_64=("$url/releases/download/v$pkgver/lazypass_Linux_x86_64.tar.gz")
+source_aarch64=("$url/releases/download/v$pkgver/lazypass_Linux_arm64.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  install -Dm755 "$srcdir/lazypass" "$pkgdir/usr/bin/lazypass"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

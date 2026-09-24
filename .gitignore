@@ -1,0 +1,8 @@
+.build/
+dist/
+coverage.out
+coverage.html
+*.corrupt.bak
+lazypass
+*.test
+.DS_Store
