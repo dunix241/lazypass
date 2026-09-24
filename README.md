@@ -60,6 +60,12 @@ If generate/strength output matters in automation, `--format json` emits one JSO
 
 ## Install
 
+```sh
+mkdir -p ~/.local/bin && OS=$(uname -s) && ARCH=$(uname -m | sed 's/aarch64/arm64/') && curl -fsSL "https://github.com/dunix241/lazypass/releases/latest/download/lazypass_${OS}_${ARCH}.tar.gz" | tar -xz -C ~/.local/bin lazypass
+```
+
+Make sure `~/.local/bin` is on your `PATH`. Alternatively:
+
 ```
 go install github.com/dunix241/lazypass@latest
 ```
