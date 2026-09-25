@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"lazypass/internal/app"
+	"lazypass/internal/config"
+	"lazypass/internal/theme"
 
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,66 @@ func TestWriteResultsTextContainsOnlyPasswords(t *testing.T) {
 	}
 	if got := output.String(); got != "first\nsecond\n" {
 		t.Fatalf("text output = %q", got)
+	}
+}
+
+func TestThemeCommands(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	command := &cobra.Command{}
+	var output bytes.Buffer
+	command.SetOut(&output)
+	if err := runThemeList(command, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "catppuccin-mocha\ndracula\ngruvbox\nmidnight-rose\nmono\nnord\nonedark\nrose-pine\ntokyo-night\n" {
+		t.Fatalf("list output = %q", got)
+	}
+	output.Reset()
+	if err := runThemePath(command, nil); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := theme.Dir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(output.String()); got != dir {
+		t.Fatalf("path output = %q, want %q", got, dir)
+	}
+	output.Reset()
+	if err := runThemeShow(command, []string{"nord"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "base: '#2E3440'") {
+		t.Fatalf("show output = %q", output.String())
+	}
+}
+
+func TestGenerateSavePreservesTheme(t *testing.T) {
+	path := t.TempDir() + "/config.yaml"
+	cfg := config.Defaults()
+	cfg.Theme = "nord"
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	command := &cobra.Command{}
+	command.SetOut(&bytes.Buffer{})
+	addOptions(command)
+	command.PersistentFlags().String("config", "", "")
+	command.Flags().Int("count", 1, "")
+	command.Flags().String("format", "text", "")
+	command.Flags().Bool("no-save", false, "")
+	if err := command.ParseFlags([]string{"--config", path, "--length", "24"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runGenerate(command, nil); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Theme != "nord" {
+		t.Fatalf("saved theme = %q, want nord", loaded.Theme)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"lazypass/internal/generator"
+	"lazypass/internal/theme"
 
 	"github.com/adrg/xdg"
 	"gopkg.in/yaml.v3"
@@ -22,6 +23,7 @@ type Config struct {
 	Symbols          bool   `yaml:"symbols"`
 	SymbolSet        string `yaml:"symbolSet"`
 	ExcludeAmbiguous bool   `yaml:"excludeAmbiguous"`
+	Theme            string `yaml:"theme"`
 }
 
 // Defaults for the first run: length 20, upper+lower+numbers.
@@ -36,6 +38,7 @@ func Defaults() Config {
 		Symbols:          d.Symbols,
 		SymbolSet:        d.SymbolSet,
 		ExcludeAmbiguous: d.ExcludeAmbiguous,
+		Theme:            theme.DefaultName(),
 	}
 }
 
@@ -51,17 +54,16 @@ func (c Config) ToOptions() generator.Options {
 	}
 }
 
-func FromOptions(o generator.Options) Config {
-	return Config{
-		Version:          1,
-		Length:           o.Length,
-		Upper:            o.Upper,
-		Lower:            o.Lower,
-		Numbers:          o.Numbers,
-		Symbols:          o.Symbols,
-		SymbolSet:        o.SymbolSet,
-		ExcludeAmbiguous: o.ExcludeAmbiguous,
-	}
+// WithOptions replaces password generator settings while preserving other config.
+func (c Config) WithOptions(o generator.Options) Config {
+	c.Length = o.Length
+	c.Upper = o.Upper
+	c.Lower = o.Lower
+	c.Numbers = o.Numbers
+	c.Symbols = o.Symbols
+	c.SymbolSet = o.SymbolSet
+	c.ExcludeAmbiguous = o.ExcludeAmbiguous
+	return c
 }
 
 func DefaultPath() (string, error) {
@@ -103,6 +105,9 @@ func Load(path string) (Config, error) {
 	}
 	if c.SymbolSet == "" {
 		c.SymbolSet = generator.DefaultSymbols
+	}
+	if c.Theme == "" {
+		c.Theme = theme.DefaultName()
 	}
 	if err := c.ToOptions().Validate(); err != nil {
 		return backupAndDefaults(path), nil

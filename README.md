@@ -38,6 +38,7 @@ lazypass generate     # one password to stdout
 | `Shift+Tab` / `↑` / `k` | previous item                                                    |
 | `r`                     | regenerate                                                       |
 | `c`                     | copy to clipboard                                                |
+| `t`                     | open the theme picker and custom-theme editor                    |
 | `q` / `Esc`             | save and quit                                                    |
 
 ### CLI
@@ -51,6 +52,15 @@ lazypass --no-tui -l 24 --no-numbers
 Available options: `-l/--length` (4–256), `--upper` / `--no-upper`, `--lower` / `--no-lower`, `--numbers` / `--no-numbers`, `--symbols` / `--no-symbols`, `--exclude-ambiguous`, `--symbol-set`, `--count`, `--format text|json`, `--copy`, `--no-save`. Piping output also skips the TUI (same as `--no-tui`).
 
 Options you pass explicitly are saved as your new defaults; add `--no-save` to keep it a one-off. Contradictory pairs like `--upper --no-upper` are rejected.
+
+### Themes
+
+The TUI includes Midnight Rose, Nord, Mono, Gruvbox, Catppuccin Mocha, OneDark,
+Dracula, Tokyo Night, and Rosé Pine. Press `t` to preview and apply themes,
+create editable copies, edit `#RRGGBB` role colors, or delete custom themes.
+Custom themes are stored in `~/.config/lazypass/themes`; `lazypass theme list`,
+`path`, and `show <name>` inspect them from the CLI. An unavailable or invalid
+selection falls back to Midnight Rose and reports a nonfatal status.
 
 ### Saved options
 

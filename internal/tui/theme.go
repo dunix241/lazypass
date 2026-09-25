@@ -1,18 +1,66 @@
 package tui
 
-import "github.com/gdamore/tcell/v2"
+import (
+	"fmt"
+	"strconv"
 
-var theme = struct {
+	"lazypass/internal/theme"
+
+	"github.com/gdamore/tcell/v2"
+)
+
+type tuiPalette struct {
 	base, surface, border, text, muted, accent, focus, warning tcell.Color
-}{
-	// Midnight Rose is lazypass's signature palette: plum surfaces, rose actions,
-	// and lavender focus states. It intentionally avoids the common terminal green.
-	base:    tcell.NewRGBColor(21, 17, 31),
-	surface: tcell.NewRGBColor(33, 26, 47),
-	border:  tcell.NewRGBColor(82, 65, 109),
-	text:    tcell.NewRGBColor(244, 239, 250),
-	muted:   tcell.NewRGBColor(181, 168, 203),
-	accent:  tcell.NewRGBColor(255, 143, 171),
-	focus:   tcell.NewRGBColor(202, 157, 246),
-	warning: tcell.NewRGBColor(251, 191, 126),
+}
+
+func newTUIPalette(p theme.Palette) (tuiPalette, error) {
+	color := func(value string) (tcell.Color, error) {
+		if len(value) != 7 || value[0] != '#' {
+			return tcell.ColorDefault, fmt.Errorf("invalid color %q", value)
+		}
+		n, err := strconv.ParseInt(value[1:], 16, 32)
+		if err != nil {
+			return tcell.ColorDefault, err
+		}
+		return tcell.NewHexColor(int32(n)), nil
+	}
+	base, err := color(p.Base)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	surface, err := color(p.Surface)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	border, err := color(p.Border)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	text, err := color(p.Text)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	muted, err := color(p.Muted)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	accent, err := color(p.Accent)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	focus, err := color(p.Focus)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	warning, err := color(p.Warning)
+	if err != nil {
+		return tuiPalette{}, err
+	}
+	return tuiPalette{base, surface, border, text, muted, accent, focus, warning}, nil
+}
+
+func defaultTUIPalette() tuiPalette {
+	p, _ := theme.Load(theme.DefaultName())
+	colors, _ := newTUIPalette(p)
+	return colors
 }

@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"lazypass/internal/generator"
+	"lazypass/internal/theme"
 )
 
 func TestDefaultsRoundTrip(t *testing.T) {
@@ -20,6 +23,31 @@ func TestDefaultsRoundTrip(t *testing.T) {
 	}
 	if loaded != c {
 		t.Fatalf("round-trip mismatch: %+v vs %+v", loaded, c)
+	}
+}
+
+func TestWithOptionsPreservesTheme(t *testing.T) {
+	c := Defaults()
+	c.Theme = "nord"
+	opts := generator.Defaults()
+	opts.Length = 32
+	updated := c.WithOptions(opts)
+	if updated.Theme != "nord" {
+		t.Fatalf("theme = %q, want nord", updated.Theme)
+	}
+}
+
+func TestLoadLegacyConfigDefaultsTheme(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("length: 20\nupper: true\nlower: true\nnumbers: true\nsymbols: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Theme != theme.DefaultName() {
+		t.Fatalf("theme = %q, want %q", loaded.Theme, theme.DefaultName())
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"lazypass/internal/app"
 	"lazypass/internal/config"
 	"lazypass/internal/generator"
+	"lazypass/internal/theme"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -29,9 +30,9 @@ const (
 )
 
 const (
-	fullFooter    = "←/→ length  •  U/L/N/S/E toggle  •  Space toggle  •  r regenerate  •  c copy  •  q quit"
-	compactFooter = "Tab focus  •  Space toggle  •  r regenerate  •  c copy  •  q quit"
-	shortFooter   = "r regenerate  •  c copy  •  q quit"
+	fullFooter    = "←/→ length  •  U/L/N/S/E toggle  •  Space toggle  •  t themes  •  r regenerate  •  c copy  •  q quit"
+	compactFooter = "Tab focus  •  Space toggle  •  t themes  •  r regenerate  •  c copy  •  q quit"
+	shortFooter   = "t themes  •  r regenerate  •  c copy  •  q quit"
 	minimalFooter = "c copy  •  q quit"
 )
 
@@ -42,7 +43,15 @@ type App struct {
 }
 
 func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error) *App {
-	s := &screen{Box: tview.NewBox(), cfg: cfg, cfgPath: cfgPath, onCopy: onCopy, selected: focusLength}
+	colors := defaultTUIPalette()
+	s := &screen{Box: tview.NewBox(), cfg: cfg, cfgPath: cfgPath, onCopy: onCopy, selected: focusLength, colors: colors}
+	if palette, err := theme.Load(cfg.Theme); err == nil {
+		if loaded, err := newTUIPalette(palette); err == nil {
+			s.colors = loaded
+		}
+	} else {
+		s.setStatus(fmt.Sprintf("Theme %q unavailable; using %s", cfg.Theme, theme.DefaultName()))
+	}
 	s.lengthText = strconv.Itoa(cfg.Length)
 	app := tview.NewApplication().EnableMouse(true)
 	s.quit = app.Stop
@@ -76,6 +85,8 @@ type screen struct {
 	statusTill     time.Time
 	quit           func()
 	draggingSlider bool
+	colors         tuiPalette
+	themePanel     themePanel
 }
 
 func (s *screen) regenerate() error {
@@ -97,16 +108,16 @@ func (s *screen) Draw(screen tcell.Screen) {
 	x, y, width, height := s.GetRect()
 	for yy := y; yy < y+height; yy++ {
 		for xx := x; xx < x+width; xx++ {
-			screen.SetContent(xx, yy, ' ', nil, tcell.StyleDefault.Background(theme.base))
+			screen.SetContent(xx, yy, ' ', nil, tcell.StyleDefault.Background(s.colors.base))
 		}
 	}
 	l := calculateLayout(width, height)
 	if l.tooSmall {
-		printAt(screen, x+max(1, (width-29)/2), y+height/2, "Resize terminal to at least 32 x 10", theme.warning)
+		printAt(screen, x+max(1, (width-29)/2), y+height/2, "Resize terminal to at least 32 x 10", s.colors.warning)
 		return
 	}
 	logo := calculateLogoLayout(width, height)
-	drawLogo(screen, logo, x, y)
+	drawLogo(screen, logo, x, y, s.colors)
 	s.drawHeaderStatus(screen, logo, x, y, width)
 	s.drawCard(screen, l, x, y)
 	footer := fullFooter
@@ -118,14 +129,17 @@ func (s *screen) Draw(screen tcell.Screen) {
 			footer = fallback
 		}
 	}
-	printAt(screen, x+max(1, (width-utf8.RuneCountInString(footer))/2), y+height-1, footer, theme.muted)
+	printAt(screen, x+max(1, (width-utf8.RuneCountInString(footer))/2), y+height-1, footer, s.colors.muted)
+	if s.themePanel.open {
+		s.drawThemePanel(screen, x, y, width, height)
+	}
 }
 
 func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, width int) {
 	if s.status != "" && time.Now().Before(s.statusTill) {
 		statusX := x + width - utf8.RuneCountInString(s.status) - 2
 		if statusX > x+logo.right()+2 {
-			printAt(screen, statusX, y, s.status, theme.focus)
+			printAt(screen, statusX, y, s.status, s.colors.focus)
 		}
 	}
 }
@@ -134,15 +148,15 @@ func (s *screen) drawCard(screen tcell.Screen, l layout, ox, oy int) {
 	r := l.card
 	r.x += ox
 	r.y += oy
-	drawBox(screen, r, theme.border)
-	printAt(screen, r.x+2, r.y, " Generate a password ", theme.accent)
+	drawBox(screen, r, s.colors.border, s.colors.surface)
+	printAt(screen, r.x+2, r.y, " Generate a password ", s.colors.accent)
 	passwordLabelY, passwordY, meterY, lengthLabelY, charactersY := r.y+2, r.y+3, r.y+4, r.y+6, r.y+9
 	if l.short && !l.compact {
 		passwordLabelY, passwordY, meterY, lengthLabelY, charactersY = r.y+1, r.y+2, r.y+3, r.y+5, r.y+8
 	}
-	printAt(screen, r.x+2, passwordLabelY, "PASSWORD", theme.muted)
+	printAt(screen, r.x+2, passwordLabelY, "PASSWORD", s.colors.muted)
 	pw := truncate(s.password, max(12, r.w-34))
-	printAt(screen, r.x+2, passwordY, pw, theme.text)
+	printAt(screen, r.x+2, passwordY, pw, s.colors.text)
 	s.drawAction(screen, l.regen, ox, oy, focusRegen, "↻ Regenerate")
 	s.drawAction(screen, l.copy, ox, oy, focusCopy, "⧉ Copy")
 	blocks := min(8, int(s.bits/16))
@@ -154,21 +168,21 @@ func (s *screen) drawCard(screen tcell.Screen, l layout, ox, oy int) {
 			meter += "░"
 		}
 	}
-	printAt(screen, r.x+2, meterY, meter, theme.accent)
+	printAt(screen, r.x+2, meterY, meter, s.colors.accent)
 	strength := fmt.Sprintf("%d bits  %s", int(s.bits+.5), s.strength)
-	printAt(screen, r.x+12, meterY, strength, theme.muted)
+	printAt(screen, r.x+12, meterY, strength, s.colors.muted)
 
 	lengthValue := s.lengthText
-	lengthLabelColor := theme.muted
+	lengthLabelColor := s.colors.muted
 	if s.selected == focusLength {
 		lengthValue = "[" + lengthValue + "]"
-		lengthLabelColor = theme.focus
+		lengthLabelColor = s.colors.focus
 	}
 	lengthLabel := "Length: " + lengthValue
 	printAt(screen, r.x+2, lengthLabelY, lengthLabel, lengthLabelColor)
 	s.drawLength(screen, l.length, ox, oy)
 	if !l.compact {
-		printAt(screen, r.x+2, charactersY, "Characters", theme.muted)
+		printAt(screen, r.x+2, charactersY, "Characters", s.colors.muted)
 	}
 	s.drawCheck(screen, l.upper, ox, oy, focusUpper, "Uppercase", "U", s.cfg.Upper)
 	s.drawCheck(screen, l.lower, ox, oy, focusLower, "Lowercase", "L", s.cfg.Lower)
@@ -184,9 +198,9 @@ func (s *screen) drawCard(screen tcell.Screen, l layout, ox, oy int) {
 func (s *screen) drawAction(screen tcell.Screen, r rect, ox, oy int, f focus, label string) {
 	r.x += ox
 	r.y += oy
-	color := theme.muted
+	color := s.colors.muted
 	if s.selected == f {
-		color = theme.focus
+		color = s.colors.focus
 	}
 	printAt(screen, r.x, r.y, label, color)
 }
@@ -194,11 +208,11 @@ func (s *screen) drawAction(screen tcell.Screen, r rect, ox, oy int, f focus, la
 func (s *screen) drawLength(screen tcell.Screen, r rect, ox, oy int) {
 	r.x += ox
 	r.y += oy
-	color := theme.text
+	color := s.colors.text
 	if s.selected == focusLength {
-		color = theme.focus
+		color = s.colors.focus
 	}
-	printAt(screen, r.x, r.y, "4", theme.muted)
+	printAt(screen, r.x, r.y, "4", s.colors.muted)
 	railStart, railWidth := sliderRail(r)
 	lengthValue := s.cfg.Length
 	if parsed, err := strconv.Atoi(s.lengthText); err == nil {
@@ -210,26 +224,26 @@ func (s *screen) drawLength(screen tcell.Screen, r rect, ox, oy int) {
 		if railStart+i <= knob {
 			ch = '━'
 		}
-		screen.SetContent(railStart+i, r.y, ch, nil, tcell.StyleDefault.Foreground(color).Background(theme.surface))
+		screen.SetContent(railStart+i, r.y, ch, nil, tcell.StyleDefault.Foreground(color).Background(s.colors.surface))
 	}
-	screen.SetContent(knob, r.y, '●', nil, tcell.StyleDefault.Foreground(color).Background(theme.surface))
-	printAt(screen, railStart+railWidth+1, r.y, "256", theme.muted)
+	screen.SetContent(knob, r.y, '●', nil, tcell.StyleDefault.Foreground(color).Background(s.colors.surface))
+	printAt(screen, railStart+railWidth+1, r.y, "256", s.colors.muted)
 }
 
 func (s *screen) drawCheck(screen tcell.Screen, r rect, ox, oy int, f focus, label, shortcut string, checked bool) {
 	r.x += ox
 	r.y += oy
-	mark, color := "[ ]", theme.muted
+	mark, color := "[ ]", s.colors.muted
 	if checked {
-		mark, color = "[✓]", theme.accent
+		mark, color = "[✓]", s.colors.accent
 	}
 	if s.selected == f {
-		color = theme.focus
+		color = s.colors.focus
 	}
 	printAt(screen, r.x, r.y, mark+" "+label, color)
-	badgeColor := theme.muted
+	badgeColor := s.colors.muted
 	if s.selected == f {
-		badgeColor = theme.focus
+		badgeColor = s.colors.focus
 	}
 	// Rune widths, not bytes: "✓" is 3 bytes but 1 cell, and using len()
 	// would shift the badge every time the box is toggled.
@@ -243,6 +257,10 @@ func (s *screen) drawCheck(screen tcell.Screen, r rect, ox, oy int, f focus, lab
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return s.WrapInputHandler(func(event *tcell.EventKey, _ func(tview.Primitive)) {
+		if s.themePanel.open {
+			s.handleThemeInput(event)
+			return
+		}
 		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
 			s.save()
 			s.quit()
@@ -307,6 +325,8 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			_ = s.regenerate()
 		case 'c':
 			s.copy()
+		case 't':
+			s.openThemePanel()
 		default:
 			if s.selected == focusLength && event.Rune() >= '0' && event.Rune() <= '9' {
 				s.typeLength(event.Rune())
@@ -385,6 +405,9 @@ func (s *screen) copy() {
 
 func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(tview.Primitive)) (bool, tview.Primitive) {
 	return s.WrapMouseHandler(func(action tview.MouseAction, event *tcell.EventMouse, _ func(tview.Primitive)) (bool, tview.Primitive) {
+		if s.themePanel.open {
+			return true, s
+		}
 		x, y := event.Position()
 		ox, oy, w, h := s.GetRect()
 		l := calculateLayout(w, h)
@@ -459,8 +482,8 @@ func truncate(value string, width int) string {
 	}
 	return value[:width-1] + "…"
 }
-func drawBox(screen tcell.Screen, r rect, color tcell.Color) {
-	style := tcell.StyleDefault.Foreground(color).Background(theme.surface)
+func drawBox(screen tcell.Screen, r rect, color, surface tcell.Color) {
+	style := tcell.StyleDefault.Foreground(color).Background(surface)
 	for yy := r.y + 1; yy < r.y+r.h-1; yy++ {
 		for xx := r.x + 1; xx < r.x+r.w-1; xx++ {
 			screen.SetContent(xx, yy, ' ', nil, style)

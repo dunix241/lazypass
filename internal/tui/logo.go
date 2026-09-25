@@ -34,9 +34,9 @@ func logoFits(width, height, logoH int) bool {
 	return cardY+cardH <= height-1
 }
 
-func drawLogo(screen tcell.Screen, logo logoLayout, ox, oy int) {
+func drawLogo(screen tcell.Screen, logo logoLayout, ox, oy int, colors tuiPalette) {
 	if logo.style == logoWordmark {
-		printAt(screen, ox+logo.x, oy+logo.y, "lazypass", theme.accent)
+		printAt(screen, ox+logo.x, oy+logo.y, "lazypass", colors.accent)
 	}
 }
 

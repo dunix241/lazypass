@@ -11,6 +11,7 @@ import (
 	"lazypass/internal/build"
 	"lazypass/internal/clipboard"
 	"lazypass/internal/config"
+	"lazypass/internal/theme"
 	"lazypass/internal/tui"
 	"lazypass/internal/util"
 
@@ -61,8 +62,14 @@ func init() {
 		&cobra.Command{Use: "path", Short: "Print the resolved configuration path", RunE: runConfigPath},
 		&cobra.Command{Use: "show", Short: "Print saved password-generation options", RunE: runConfigShow},
 	)
+	themeCommand := &cobra.Command{Use: "theme", Short: "Inspect lazypass themes"}
+	themeCommand.AddCommand(
+		&cobra.Command{Use: "list", Short: "List built-in and custom themes", RunE: runThemeList},
+		&cobra.Command{Use: "path", Short: "Print the custom theme directory", RunE: runThemePath},
+		&cobra.Command{Use: "show <name>", Short: "Print a resolved theme palette", Args: cobra.ExactArgs(1), RunE: runThemeShow},
+	)
 	version := &cobra.Command{Use: "version", Short: "Print lazypass version", Run: func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.OutOrStdout(), build.Version) }}
-	rootCmd.AddCommand(generate, tuiCommand, configCommand, version)
+	rootCmd.AddCommand(generate, tuiCommand, configCommand, themeCommand, version)
 }
 
 func addOptions(cmd *cobra.Command) {
@@ -103,7 +110,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return usage(err)
 	}
-	ui := tui.NewApp(config.FromOptions(opts), path, clipboard.Copy)
+	ui := tui.NewApp(cfg.WithOptions(opts), path, clipboard.Copy)
 	if err := ui.Init(); err != nil {
 		return err
 	}
@@ -140,7 +147,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 
 	noSave := cmd.Flags().Lookup("no-save") != nil && mustBool(cmd, "no-save")
 	if hasOptionOverrides(cmd) && !noSave {
-		if err := config.FromOptions(opts).Save(path); err != nil {
+		if err := cfg.WithOptions(opts).Save(path); err != nil {
 			return fmt.Errorf("saving options: %w", err)
 		}
 	}
@@ -189,6 +196,41 @@ func runConfigShow(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	_, err = cmd.OutOrStdout().Write(data)
+	return err
+}
+
+func runThemeList(cmd *cobra.Command, _ []string) error {
+	names, err := theme.List()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runThemePath(cmd *cobra.Command, _ []string) error {
+	path, err := theme.Dir()
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+	return err
+}
+
+func runThemeShow(cmd *cobra.Command, args []string) error {
+	palette, err := theme.Load(args[0])
+	if err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(palette)
 	if err != nil {
 		return err
 	}

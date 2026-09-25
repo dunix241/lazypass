@@ -136,7 +136,7 @@ func TestLengthFocusIsRenderedAfterGlobalShortcut(t *testing.T) {
 	l := calculateLayout(84, 24)
 	cell, style, _ := sim.Get(l.card.x+2, l.card.y+6)
 	foreground, _, _ := style.Decompose()
-	if cell != "L" || foreground != theme.focus {
+	if cell != "L" || foreground != a.screen.colors.focus {
 		t.Fatalf("length label = %q with color %v, want focused Length", cell, foreground)
 	}
 }
@@ -171,8 +171,8 @@ func TestDrawPaintsEntireViewport(t *testing.T) {
 
 	_, style, _ := sim.Get(83, 23)
 	foreground, background, _ := style.Decompose()
-	if background != theme.base {
-		t.Fatalf("viewport background = %v, want %v (foreground %v)", background, theme.base, foreground)
+	if background != a.screen.colors.base {
+		t.Fatalf("viewport background = %v, want %v (foreground %v)", background, a.screen.colors.base, foreground)
 	}
 	logo := calculateLogoLayout(84, 24)
 	if logo.style != logoWordmark {
