@@ -203,7 +203,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 	}
 	footer := fullFooter
 	if s.route == VaultRoute {
-		footer = "↑/↓ or j/k select  •  / filter  •  Enter or l open/copy  •  h/Backspace parent  •  c copy  •  v view  •  q quit"
+		footer = "↑/↓ or j/k select  •  / filter  •  Enter or l open/copy  •  h/Backspace parent  •  c copy  •  t themes  •  v view  •  q quit"
 	} else if l.compact || l.short {
 		footer = compactFooter
 	}
@@ -670,6 +670,8 @@ func (s *screen) handleVaultInput(event *tcell.EventKey) {
 			s.openVaultNode()
 		case 'c':
 			s.copyVaultEntry()
+		case 't':
+			s.openThemePanel()
 		}
 	}
 }

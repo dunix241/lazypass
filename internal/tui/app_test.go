@@ -631,6 +631,14 @@ func TestVaultMouseSelectsAndActivates(t *testing.T) {
 	}
 }
 
+func TestVaultThemeShortcut(t *testing.T) {
+	a := NewApp(config.Defaults(), "", nil, WithInitialRoute(VaultRoute))
+	a.screen.handleVaultInput(tcell.NewEventKey(tcell.KeyRune, 't', tcell.ModNone))
+	if !a.screen.themePanel.open {
+		t.Fatal("t should open the theme picker in vault view")
+	}
+}
+
 func TestStorePickerMouseSelectsAndCompletesFolder(t *testing.T) {
 	p := &memoryVault{nodes: map[string][]vault.Node{
 		"": {{Name: "home", Path: vault.Path{"home"}, Kind: vault.FolderNode}, {Name: "personal", Path: vault.Path{"personal"}, Kind: vault.FolderNode}},
