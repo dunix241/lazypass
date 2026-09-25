@@ -2,10 +2,14 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"sort"
+	"strings"
 
 	"lazypass/internal/app"
 	"lazypass/internal/build"
@@ -14,10 +18,15 @@ import (
 	"lazypass/internal/theme"
 	"lazypass/internal/tui"
 	"lazypass/internal/util"
+	"lazypass/internal/vault"
+	passprovider "lazypass/internal/vault/pass"
+	"lazypass/internal/vault/service"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
+
+const maxVaultPasswordBytes = 64 << 10
 
 var rootCmd = &cobra.Command{
 	Use:   "lazypass",
@@ -69,7 +78,16 @@ func init() {
 		&cobra.Command{Use: "show <name>", Short: "Print a resolved theme palette", Args: cobra.ExactArgs(1), RunE: runThemeShow},
 	)
 	version := &cobra.Command{Use: "version", Short: "Print lazypass version", Run: func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.OutOrStdout(), build.Version) }}
-	rootCmd.AddCommand(generate, tuiCommand, configCommand, themeCommand, version)
+	vaultCommand := &cobra.Command{Use: "vault", Short: "Manage an encrypted password vault", RunE: runVaultTUI}
+	vaultCommand.AddCommand(
+		&cobra.Command{Use: "status", Short: "Show vault provider setup status", Args: cobra.NoArgs, RunE: runVaultStatus},
+		&cobra.Command{Use: "list [path]", Short: "List vault folders and entries", Args: cobra.MaximumNArgs(1), RunE: runVaultList},
+		&cobra.Command{Use: "show <path>", Short: "Show entry metadata", Args: cobra.ExactArgs(1), RunE: runVaultShow},
+		&cobra.Command{Use: "store <path>", Short: "Store a password read from stdin", Args: cobra.ExactArgs(1), RunE: runVaultStore},
+		&cobra.Command{Use: "copy <path>", Short: "Copy an entry password", Args: cobra.ExactArgs(1), RunE: runVaultCopy},
+		&cobra.Command{Use: "sync", Short: "Explicitly pull and push the vault Git store", Args: cobra.NoArgs, RunE: runVaultSync},
+	)
+	rootCmd.AddCommand(generate, tuiCommand, configCommand, themeCommand, vaultCommand, version)
 }
 
 func addOptions(cmd *cobra.Command) {
@@ -99,6 +117,14 @@ func runDefault(cmd *cobra.Command, _ []string) error {
 }
 
 func runTUI(cmd *cobra.Command, _ []string) error {
+	return runTUIRoute(cmd, tui.GeneratorRoute)
+}
+
+func runVaultTUI(cmd *cobra.Command, _ []string) error {
+	return runTUIRoute(cmd, tui.VaultRoute)
+}
+
+func runTUIRoute(cmd *cobra.Command, route tui.Route) error {
 	cfg, path, err := loadResolved(cmd)
 	if err != nil {
 		return err
@@ -110,7 +136,8 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return usage(err)
 	}
-	ui := tui.NewApp(cfg.WithOptions(opts), path, clipboard.Copy)
+	vaultService, _ := configuredVaultService(cfg)
+	ui := tui.NewApp(cfg.WithOptions(opts), path, clipboard.Copy, tui.WithVault(vaultService), tui.WithInitialRoute(route))
 	if err := ui.Init(); err != nil {
 		return err
 	}
@@ -236,6 +263,207 @@ func runThemeShow(cmd *cobra.Command, args []string) error {
 	}
 	_, err = cmd.OutOrStdout().Write(data)
 	return err
+}
+
+func runVaultStatus(cmd *cobra.Command, _ []string) error {
+	cfg, _, err := loadResolved(cmd)
+	if err != nil {
+		return err
+	}
+	p, ok := configuredVault(cfg)
+	if !ok {
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "provider: unavailable")
+		return err
+	}
+	status := "ready"
+	if err := p.Status(cmd.Context()); err != nil {
+		if errors.Is(err, vault.ErrUninitialized) {
+			status = "uninitialized"
+		} else {
+			status = "unavailable"
+		}
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "provider: pass\nstoreDir: %s\nstatus: %s\n", p.StoreDirectory(), status)
+	return err
+}
+
+func runVaultList(cmd *cobra.Command, args []string) error {
+	s, err := vaultService(cmd)
+	if err != nil {
+		return err
+	}
+	path, err := vaultPath(optionalArg(args))
+	if err != nil {
+		return usage(err)
+	}
+	nodes, err := s.List(cmd.Context(), path)
+	if err != nil {
+		return err
+	}
+	for _, node := range nodes {
+		kind := "entry"
+		if node.Kind == vault.FolderNode {
+			kind = "folder"
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", kind, node.Path.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runVaultShow(cmd *cobra.Command, args []string) error {
+	s, err := vaultService(cmd)
+	if err != nil {
+		return err
+	}
+	path, err := vaultPath(args[0])
+	if err != nil {
+		return usage(err)
+	}
+	entry, err := s.Show(cmd.Context(), path)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "path: %s\n", entry.Path.String()); err != nil {
+		return err
+	}
+	if entry.Username != "" {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "username: %s\n", entry.Username); err != nil {
+			return err
+		}
+	}
+	if entry.URL != "" {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "url: %s\n", entry.URL); err != nil {
+			return err
+		}
+	}
+	if entry.Notes != "" {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "notes: %s\n", entry.Notes); err != nil {
+			return err
+		}
+	}
+	keys := make([]string, 0, len(entry.Fields))
+	for key := range entry.Fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", key, entry.Fields[key]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runVaultStore(cmd *cobra.Command, args []string) error {
+	s, err := vaultService(cmd)
+	if err != nil {
+		return err
+	}
+	path, err := vaultPath(args[0])
+	if err != nil {
+		return usage(err)
+	}
+	password, err := readVaultPassword(cmd.InOrStdin())
+	if err != nil {
+		return err
+	}
+	return s.Store(cmd.Context(), vault.Entry{Path: path, Password: password})
+}
+
+func readVaultPassword(reader io.Reader) (string, error) {
+	data, err := io.ReadAll(io.LimitReader(reader, maxVaultPasswordBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("reading password: %w", err)
+	}
+	if len(data) > maxVaultPasswordBytes {
+		return "", fmt.Errorf("password input exceeds %d KiB", maxVaultPasswordBytes>>10)
+	}
+	data = bytes.TrimSuffix(data, []byte("\n"))
+	data = bytes.TrimSuffix(data, []byte("\r"))
+	if bytes.ContainsAny(data, "\r\n") {
+		return "", fmt.Errorf("password input must be a single line")
+	}
+	return string(data), nil
+}
+
+func runVaultCopy(cmd *cobra.Command, args []string) error {
+	s, err := vaultService(cmd)
+	if err != nil {
+		return err
+	}
+	path, err := vaultPath(args[0])
+	if err != nil {
+		return usage(err)
+	}
+	if err := s.CopyPassword(cmd.Context(), path); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "copied")
+	return err
+}
+
+func runVaultSync(cmd *cobra.Command, _ []string) error {
+	s, err := vaultService(cmd)
+	if err != nil {
+		return err
+	}
+	result, err := s.Sync(cmd.Context())
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "pulled: %t\npushed: %t\n", result.Pulled, result.Pushed)
+	return err
+}
+
+func vaultService(cmd *cobra.Command) (service.Service, error) {
+	cfg, _, err := loadResolved(cmd)
+	if err != nil {
+		return service.Service{}, err
+	}
+	return vaultServiceForConfig(cfg)
+}
+
+func vaultServiceForConfig(cfg config.Config) (service.Service, error) {
+	s, ok := configuredVaultService(cfg)
+	if !ok {
+		return service.Service{}, vault.ErrUnavailable
+	}
+	return s, nil
+}
+
+func configuredVaultService(cfg config.Config) (service.Service, bool) {
+	p, ok := configuredVault(cfg)
+	if !ok {
+		return service.Service{}, false
+	}
+	return service.Service{Provider: p, Copy: clipboard.Copy}, true
+}
+
+func configuredVault(cfg config.Config) (*passprovider.Provider, bool) {
+	if cfg.Vault.Provider != "pass" {
+		return nil, false
+	}
+	return passprovider.New(cfg.Vault.StoreDir, nil), true
+}
+
+func vaultPath(text string) (vault.Path, error) {
+	if text == "" {
+		return nil, nil
+	}
+	path := vault.Path(strings.Split(text, "/"))
+	if err := path.Validate(); err != nil {
+		return nil, err
+	}
+	return path, nil
+}
+
+func optionalArg(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return args[0]
 }
 
 func loadResolved(cmd *cobra.Command) (config.Config, string, error) {

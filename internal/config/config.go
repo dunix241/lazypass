@@ -2,7 +2,9 @@
 package config
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -24,6 +26,14 @@ type Config struct {
 	SymbolSet        string `yaml:"symbolSet"`
 	ExcludeAmbiguous bool   `yaml:"excludeAmbiguous"`
 	Theme            string `yaml:"theme"`
+	NerdFont         bool   `yaml:"nerdFont"`
+	Vault            Vault  `yaml:"vault"`
+}
+
+// Vault selects an optional password vault backend.
+type Vault struct {
+	Provider string `yaml:"provider"`
+	StoreDir string `yaml:"storeDir"`
 }
 
 // Defaults for the first run: length 20, upper+lower+numbers.
@@ -39,6 +49,7 @@ func Defaults() Config {
 		SymbolSet:        d.SymbolSet,
 		ExcludeAmbiguous: d.ExcludeAmbiguous,
 		Theme:            theme.DefaultName(),
+		NerdFont:         true,
 	}
 }
 
@@ -82,8 +93,8 @@ func ResolvePath(explicit string) (string, error) {
 	return DefaultPath()
 }
 
-// Load returns defaults for a missing file; a corrupt file is backed up
-// to .corrupt.bak and replaced by defaults instead of crashing.
+// Load returns defaults for a missing file. Invalid existing files are left
+// untouched and reported to the caller so user settings are never replaced.
 func Load(path string) (Config, error) {
 	if path == "" {
 		p, err := DefaultPath()
@@ -99,9 +110,9 @@ func Load(path string) (Config, error) {
 		}
 		return Defaults(), err
 	}
-	var c Config
+	c := Defaults()
 	if err := yaml.Unmarshal(data, &c); err != nil {
-		return backupAndDefaults(path), nil
+		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
 	if c.SymbolSet == "" {
 		c.SymbolSet = generator.DefaultSymbols
@@ -110,14 +121,9 @@ func Load(path string) (Config, error) {
 		c.Theme = theme.DefaultName()
 	}
 	if err := c.ToOptions().Validate(); err != nil {
-		return backupAndDefaults(path), nil
+		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
 	return c, nil
-}
-
-func backupAndDefaults(path string) Config {
-	_ = os.Rename(path, path+".corrupt.bak")
-	return Defaults()
 }
 
 // Save writes atomically (tmp + rename) with 0600 permissions.
@@ -132,12 +138,17 @@ func (c Config) Save(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(c)
-	if err != nil {
+	var data bytes.Buffer
+	encoder := yaml.NewEncoder(&data)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(c); err != nil {
+		return err
+	}
+	if err := encoder.Close(); err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	if err := os.WriteFile(tmp, data.Bytes(), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

@@ -17,6 +17,7 @@ type layout struct {
 	numbers  rect
 	symbols  rect
 	ambig    rect
+	store    rect
 	regen    rect
 	copy     rect
 }
@@ -36,7 +37,7 @@ func cardHeight(compact, short bool) int {
 }
 
 func calculateLayout(width, height int) layout {
-	if width < 32 || height < 15 || (width < 64 && height < 16) {
+	if width < 32 || height < 15 || (width < compactWidth && height < 18) {
 		return layout{tooSmall: true}
 	}
 	compact := width < compactWidth
@@ -52,8 +53,9 @@ func calculateLayout(width, height int) layout {
 	cardY = max(cardY, logo.y+logo.h)
 	l := layout{compact: compact, short: short, card: rect{cardX, cardY, cardW, cardH}}
 	if short && !compact {
-		l.regen = rect{cardX + cardW - 30, cardY + 2, 12, 1}
-		l.copy = rect{cardX + cardW - 15, cardY + 2, 12, 1}
+		l.store = rect{cardX + cardW - 29, cardY + 2, 5, 1}
+		l.regen = rect{cardX + cardW - 22, cardY + 2, 12, 1}
+		l.copy = rect{cardX + cardW - 8, cardY + 2, 6, 1}
 		l.length = rect{cardX + 2, cardY + 6, cardW - 4, 1}
 		l.upper = rect{cardX + 2, cardY + 9, (cardW - 4) / 2, 1}
 		l.lower = rect{cardX + cardW/2, cardY + 9, cardW/2 - 2, 1}
@@ -62,8 +64,12 @@ func calculateLayout(width, height int) layout {
 		l.ambig = rect{cardX + 2, cardY + 11, cardW - 4, 1}
 		return l
 	}
-	l.regen = rect{cardX + cardW - 30, cardY + 3, 12, 1}
-	l.copy = rect{cardX + cardW - 15, cardY + 3, 12, 1}
+	l.store = rect{cardX + cardW - 15, cardY + 3, 5, 1}
+	if !compact {
+		l.store = rect{cardX + cardW - 29, cardY + 3, 5, 1}
+		l.regen = rect{cardX + cardW - 22, cardY + 3, 12, 1}
+	}
+	l.copy = rect{cardX + cardW - 8, cardY + 3, 6, 1}
 	l.length = rect{cardX + 2, cardY + 7, cardW - 4, 1}
 	if compact {
 		l.upper = rect{cardX + 2, cardY + 10, cardW - 4, 1}

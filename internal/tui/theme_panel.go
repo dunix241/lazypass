@@ -41,7 +41,7 @@ var themeRoles = []string{"base", "surface", "border", "text", "muted", "accent"
 func (s *screen) openThemePanel() {
 	names, err := theme.List()
 	if err != nil {
-		s.setStatus("Unable to list themes")
+		s.notify(notificationError, "Unable to list themes")
 		return
 	}
 	p := themePanel{open: true, names: names, original: s.colors, originalID: s.cfg.Theme}
@@ -139,8 +139,7 @@ func (s *screen) handleThemePicker(event *tcell.EventKey, p *themePanel) {
 		if len(p.names) == 0 || !s.previewTheme(p, p.names[p.selected]) {
 			return
 		}
-		s.cfg.Theme = p.names[p.selected]
-		if err := s.cfg.Save(s.cfgPath); err != nil {
+		if err := s.saveTheme(p.names[p.selected]); err != nil {
 			p.error = "Saving config: " + err.Error()
 			return
 		}
@@ -174,6 +173,10 @@ func (s *screen) handleThemePicker(event *tcell.EventKey, p *themePanel) {
 
 func (s *screen) handleThemeName(event *tcell.EventKey, p *themePanel) {
 	switch event.Key() {
+	case tcell.KeyCtrlU:
+		p.name, p.nameEdits = "", true
+	case tcell.KeyCtrlW:
+		p.name, p.nameEdits = deletePreviousWord(p.name), true
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(p.name) > 0 {
 			p.name = p.name[:len(p.name)-1]
@@ -222,6 +225,10 @@ func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 	case tcell.KeyDown:
 		p.role = (p.role + 1) % len(themeRoles)
 		p.colorText, p.colorEdits = paletteColor(p.pending, p.role), false
+	case tcell.KeyCtrlU:
+		p.colorText, p.colorEdits = "", true
+	case tcell.KeyCtrlW:
+		p.colorText, p.colorEdits = deletePreviousWord(p.colorText), true
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(p.colorText) > 0 {
 			p.colorText = p.colorText[:len(p.colorText)-1]

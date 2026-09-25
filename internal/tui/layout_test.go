@@ -62,7 +62,7 @@ func TestCardStartsBelowLogo(t *testing.T) {
 }
 
 func TestCalculateLayoutRejectsTinyViewport(t *testing.T) {
-	for _, size := range [][2]int{{31, 20}, {80, 9}} {
+	for _, size := range [][2]int{{31, 20}, {80, 9}, {32, 17}, {50, 17}} {
 		if !calculateLayout(size[0], size[1]).tooSmall {
 			t.Fatalf("%dx%d should be too small", size[0], size[1])
 		}

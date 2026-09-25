@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lazypass/internal/generator"
@@ -37,6 +38,29 @@ func TestWithOptionsPreservesTheme(t *testing.T) {
 	}
 }
 
+func TestVaultConfigRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	c := Defaults()
+	c.Vault = Vault{Provider: "pass", StoreDir: "/vault"}
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Vault != c.Vault {
+		t.Fatalf("vault = %#v, want %#v", loaded.Vault, c.Vault)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "vault:\n  provider: pass\n  storeDir: /vault\n") {
+		t.Fatalf("config does not use two-space indentation:\n%s", data)
+	}
+}
+
 func TestLoadLegacyConfigDefaultsTheme(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("length: 20\nupper: true\nlower: true\nnumbers: true\nsymbols: false\n"), 0o600); err != nil {
@@ -48,6 +72,9 @@ func TestLoadLegacyConfigDefaultsTheme(t *testing.T) {
 	}
 	if loaded.Theme != theme.DefaultName() {
 		t.Fatalf("theme = %q, want %q", loaded.Theme, theme.DefaultName())
+	}
+	if !loaded.NerdFont {
+		t.Fatal("legacy config should default Nerd Font support on")
 	}
 }
 
@@ -61,21 +88,22 @@ func TestMissingFileGivesDefaults(t *testing.T) {
 	}
 }
 
-func TestCorruptFileBacksUpAndDefaults(t *testing.T) {
+func TestCorruptFileIsPreservedAndReported(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte("::: not yaml :::"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(path)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected corrupt config error")
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("load: %v", err)
+		t.Fatal(err)
 	}
-	if loaded != Defaults() {
-		t.Fatalf("expected defaults on corrupt, got %+v", loaded)
-	}
-	if _, err := os.Stat(path + ".corrupt.bak"); err != nil {
-		t.Fatalf("expected backup file: %v", err)
+	if string(data) != "::: not yaml :::" {
+		t.Fatalf("config content changed: %q", data)
 	}
 }
 
@@ -105,26 +133,23 @@ func TestExplicitPathOverridesEnvironment(t *testing.T) {
 	}
 }
 
-func TestInvalidValuesBackUpAndRestoreDefaults(t *testing.T) {
+func TestInvalidValuesArePreservedAndReported(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	invalid := "length: 999\nupper: false\nlower: false\nnumbers: false\nsymbols: false\n"
 	if err := os.WriteFile(path, []byte(invalid), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(path)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected invalid config error")
+	}
+	stored, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("load: %v", err)
+		t.Fatal(err)
 	}
-	if loaded != Defaults() {
-		t.Fatalf("expected defaults for invalid config, got %+v", loaded)
-	}
-	backup, err := os.ReadFile(path + ".corrupt.bak")
-	if err != nil {
-		t.Fatalf("read backup: %v", err)
-	}
-	if string(backup) != invalid {
-		t.Fatalf("backup content changed: %q", backup)
+	if string(stored) != invalid {
+		t.Fatalf("config content changed: %q", stored)
 	}
 }
 

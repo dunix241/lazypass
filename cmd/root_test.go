@@ -13,6 +13,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func TestReadVaultPassword(t *testing.T) {
+	for _, test := range []struct {
+		input string
+		want  string
+		err   bool
+	}{
+		{"secret\n", "secret", false},
+		{"secret\r\n", "secret", false},
+		{"one\ntwo", "", true},
+	} {
+		got, err := readVaultPassword(bytes.NewBufferString(test.input))
+		if (err != nil) != test.err || got != test.want {
+			t.Fatalf("readVaultPassword(%q) = %q, %v", test.input, got, err)
+		}
+	}
+	if _, err := readVaultPassword(bytes.NewBuffer(make([]byte, maxVaultPasswordBytes+1))); err == nil {
+		t.Fatal("accepted oversized password input")
+	}
+}
+
 func TestWriteResultsTextContainsOnlyPasswords(t *testing.T) {
 	var output bytes.Buffer
 	command := &cobra.Command{}
@@ -122,6 +142,16 @@ func TestExitCode(t *testing.T) {
 	}
 	if got := ExitCode(assertionError("clipboard unavailable")); got != 1 {
 		t.Fatalf("runtime exit code = %d, want 1", got)
+	}
+}
+
+func TestVaultCommandStartsInteractiveVaultRoute(t *testing.T) {
+	command, _, err := rootCmd.Find([]string{"vault"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command == nil || command.RunE == nil {
+		t.Fatal("vault command must have an interactive handler")
 	}
 }
 

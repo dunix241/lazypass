@@ -11,7 +11,8 @@ Interactive local password generator for the terminal. `lazypass` opens an inter
 - Ambiguous-character filter (`I l 1 O 0`) and custom symbol set.
 - Copy goes straight to the clipboard (`wl-copy`, `xclip`, or native) and is never printed.
 - JSON output (`generate --format json`) with password, length, entropy bits, and strength.
-- Layout adapts to narrow or short terminals (minimum 32×10), mouse input supported.
+- Layout adapts to narrow or short terminals (minimum 32×18), mouse input supported.
+- Optional encrypted vault with pluggable backends (`pass` included), folder-organized entries, and Git sync.
 
 ## Demo
 
@@ -29,7 +30,7 @@ lazypass generate     # one password to stdout
 | Key                     | Action                                                           |
 | ----------------------- | ---------------------------------------------------------------- |
 | `←` / `→`               | decrease / increase length                                       |
-| `+` / `-`               | increase / decrease length                                       |
+| `-` / `+`               | decrease / increase length                                       |
 | `0`–`9`                 | type length directly (while length field is focused)             |
 | `Backspace`             | delete a typed digit                                             |
 | `U` `L` `N` `S` `E`     | toggle uppercase, lowercase, numbers, symbols, exclude-ambiguous |
@@ -38,6 +39,7 @@ lazypass generate     # one password to stdout
 | `Shift+Tab` / `↑` / `k` | previous item                                                    |
 | `r`                     | regenerate                                                       |
 | `c`                     | copy to clipboard                                                |
+| `a`                     | add the generated password to Vault                              |
 | `t`                     | open the theme picker and custom-theme editor                    |
 | `q` / `Esc`             | save and quit                                                    |
 
@@ -61,6 +63,33 @@ create editable copies, edit `#RRGGBB` role colors, or delete custom themes.
 Custom themes are stored in `~/.config/lazypass/themes`; `lazypass theme list`,
 `path`, and `show <name>` inspect them from the CLI. An unavailable or invalid
 selection falls back to Midnight Rose and reports a nonfatal status.
+
+### Vault
+
+lazypass can store passwords in an encrypted vault. Backends are pluggable:
+`pass` (the standard Unix password manager) ships today, with a native age
+vault, KeePassXC, Bitwarden, and 1Password planned. Using `pass` needs it
+installed and an initialized store (`pass init`), enabled with:
+
+```yaml
+vault:
+  provider: pass
+```
+
+`lazypass vault` opens the vault browser; `v` switches between the generator
+and vault views, and `a` stores the generated password. From the CLI:
+
+```
+lazypass vault list [path]   # folders and entries
+lazypass vault show <path>   # entry metadata, never the password
+lazypass vault store <path>  # password read from stdin
+lazypass vault copy <path>   # copy without printing
+lazypass vault sync          # pull and push the Git store
+lazypass vault status        # backend setup state
+```
+
+Entries live in folders (`personal/mail`) and can carry a username, URL, notes,
+and custom fields.
 
 ### Saved options
 
