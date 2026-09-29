@@ -3,19 +3,20 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"lazypass/internal/config"
+	"lazypass/internal/vault"
+	"lazypass/internal/vault/service"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/rivo/uniseg"
-	"lazypass/internal/vault"
-	"lazypass/internal/vault/service"
 )
-
-import "lazypass/internal/config"
 
 type memoryVault struct {
 	nodes map[string][]vault.Node
@@ -410,9 +411,89 @@ func TestVaultVimNavigation(t *testing.T) {
 	if copied != "secret" {
 		t.Fatal("l should copy the selected entry")
 	}
+	copied = ""
+	a.screen.handleVaultInput(tcell.NewEventKey(tcell.KeyRune, 'c', tcell.ModNone))
+	if copied != "" {
+		t.Fatal("c should not copy entries in Vault")
+	}
+	a.screen.handleVaultInput(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone))
+	if copied != "secret" {
+		t.Fatal("Enter should copy the selected entry")
+	}
 	a.screen.handleVaultInput(tcell.NewEventKey(tcell.KeyRune, 'h', tcell.ModNone))
 	if len(a.screen.vaultPath) != 0 || a.screen.vaultSelected != 1 {
 		t.Fatalf("h should restore the parent selection, path = %q selected = %d", a.screen.vaultPath, a.screen.vaultSelected)
+	}
+}
+
+func TestVaultFooterUsesVaultHintsAtEveryWidth(t *testing.T) {
+	for _, width := range []int{84, 50, 32} {
+		a := NewApp(config.Defaults(), "", nil, WithInitialRoute(VaultRoute))
+		sim := tcell.NewSimulationScreen("UTF-8")
+		if err := sim.Init(); err != nil {
+			t.Fatal(err)
+		}
+		sim.SetSize(width, 24)
+		a.screen.SetRect(0, 0, width, 24)
+		a.screen.Draw(sim)
+		var footer strings.Builder
+		for x := 0; x < width; x++ {
+			cell, _, _ := sim.Get(x, 23)
+			footer.WriteString(cell)
+		}
+		sim.Fini()
+		text := footer.String()
+		if !strings.Contains(text, "h back") || !strings.Contains(text, "l open/copy") || !strings.Contains(text, "q quit") || strings.Contains(text, "a Add") || strings.Contains(text, "c copy") {
+			t.Fatalf("%d-column Vault footer = %q", width, text)
+		}
+	}
+}
+
+func TestVaultMouseMatchesScrolledRows(t *testing.T) {
+	nodes := make([]vault.Node, 20)
+	for i := range nodes {
+		name := fmt.Sprintf("entry-%02d", i)
+		nodes[i] = vault.Node{Name: name, Path: vault.Path{name}, Kind: vault.EntryNode}
+	}
+	a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: &memoryVault{nodes: map[string][]vault.Node{"": nodes}}}), WithInitialRoute(VaultRoute))
+	if err := a.Init(); err != nil {
+		t.Fatal(err)
+	}
+	a.screen.SetRect(0, 0, 50, 18)
+	l := calculateLayout(50, 18)
+	a.screen.vaultSelected = 18
+	listY, _, start := a.screen.vaultListWindow(l.card)
+	event := tcell.NewEventMouse(l.card.x+2, listY, tcell.Button1, tcell.ModNone)
+	a.screen.handleVaultMouse(tview.MouseLeftClick, event, l, 0, 0)
+	if a.screen.vaultSelected != start {
+		t.Fatalf("clicked index = %d, visible first = %d", a.screen.vaultSelected, start)
+	}
+	a.screen.vaultFiltering, a.screen.vaultFilter, a.screen.vaultSelected = true, "entry", 18
+	listY, _, start = a.screen.vaultListWindow(l.card)
+	event = tcell.NewEventMouse(l.card.x+2, listY, tcell.Button1, tcell.ModNone)
+	a.screen.handleVaultMouse(tview.MouseLeftClick, event, l, 0, 0)
+	if a.screen.vaultSelected != start {
+		t.Fatalf("filtered clicked index = %d, visible first = %d", a.screen.vaultSelected, start)
+	}
+}
+
+func TestResizeMessageMatchesMinimumLayout(t *testing.T) {
+	a := NewApp(config.Defaults(), "", nil, WithInitialRoute(VaultRoute))
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer sim.Fini()
+	sim.SetSize(32, 17)
+	a.screen.SetRect(0, 0, 32, 17)
+	a.screen.Draw(sim)
+	var row strings.Builder
+	for x := 0; x < 32; x++ {
+		cell, _, _ := sim.Get(x, 8)
+		row.WriteString(cell)
+	}
+	if !strings.Contains(row.String(), "min 32x18") {
+		t.Fatalf("resize message = %q", row.String())
 	}
 }
 

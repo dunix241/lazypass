@@ -63,6 +63,10 @@ const (
 	compactFooter = "Tab focus  •  Space toggle  •  a Add  •  t themes  •  r regenerate  •  c copy  •  v view  •  q quit"
 	shortFooter   = "a Add  •  t themes  •  r regenerate  •  c copy  •  v view  •  q quit"
 	minimalFooter = "c copy  •  q quit"
+	vaultFooter   = "h back  •  l open/copy  •  / filter  •  t themes  •  v view  •  q quit"
+	vaultCompact  = "h back  •  l open/copy  •  / filter  •  v view  •  q quit"
+	vaultShort    = "h back  •  l open/copy  •  v view  •  q quit"
+	vaultMinimal  = "h back • l open/copy • q quit"
 )
 
 // App owns application lifecycle; Screen is responsible for all viewport drawing.
@@ -190,7 +194,8 @@ func (s *screen) Draw(screen tcell.Screen) {
 	}
 	l := calculateLayout(width, height)
 	if l.tooSmall {
-		printAt(screen, x+max(1, (width-29)/2), y+height/2, "Resize terminal to at least 32 x 10", s.colors.warning)
+		message := truncate("Resize terminal (min 32x18)", max(0, width-2))
+		printAt(screen, x+max(1, (width-utf8.RuneCountInString(message))/2), y+height/2, message, s.colors.warning)
 		return
 	}
 	logo := calculateLogoLayout(width, height)
@@ -202,12 +207,14 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.drawCard(screen, l, x, y)
 	}
 	footer := fullFooter
+	fallbacks := []string{compactFooter, shortFooter, minimalFooter}
 	if s.route == VaultRoute {
-		footer = "↑/↓ or j/k select  •  / filter  •  Enter or l open/copy  •  h/Backspace parent  •  c copy  •  t themes  •  v view  •  q quit"
+		footer = vaultFooter
+		fallbacks = []string{vaultCompact, vaultShort, vaultMinimal}
 	} else if l.compact || l.short {
 		footer = compactFooter
 	}
-	for _, fallback := range []string{compactFooter, shortFooter, minimalFooter} {
+	for _, fallback := range fallbacks {
 		if utf8.RuneCountInString(footer) > width-2 {
 			footer = fallback
 		}
@@ -244,8 +251,11 @@ func (s *screen) drawVault(screen tcell.Screen, l layout, ox, oy int) {
 		printAt(screen, r.x+2, r.y+2, "Vault unavailable. Configure vault.provider: pass.", s.colors.warning)
 		return
 	}
+	if s.vaultFiltering {
+		printAt(screen, r.x+2, r.y+1, truncate("Filter: "+s.vaultFilter+"_", r.w-4), s.colors.muted)
+	}
 	if s.vaultError != "" {
-		listY := r.y + 2
+		listY, _, _ := s.vaultListWindow(r)
 		if s.showVaultParentRow() {
 			parent := s.vaultParentNode()
 			prefix := "  "
@@ -259,11 +269,8 @@ func (s *screen) drawVault(screen tcell.Screen, l layout, ox, oy int) {
 		return
 	}
 	nodes := s.vaultDisplayNodes()
-	if s.vaultFiltering {
-		printAt(screen, r.x+2, r.y+1, truncate("Filter: "+s.vaultFilter+"_", r.w-4), s.colors.muted)
-	}
 	if len(nodes) == 0 {
-		message, color := "No entries in this folder.", s.colors.muted
+		message := "No entries in this folder."
 		if s.vaultFiltering {
 			message = "No matching folders or entries."
 		}
@@ -271,16 +278,10 @@ func (s *screen) drawVault(screen tcell.Screen, l layout, ox, oy int) {
 		if s.vaultFiltering {
 			messageY++
 		}
-		printAt(screen, r.x+2, messageY, truncate(message, r.w-4), color)
+		printAt(screen, r.x+2, messageY, truncate(message, r.w-4), s.colors.muted)
 		return
 	}
-	limit := r.h - 3
-	listY := r.y + 2
-	if s.vaultFiltering {
-		limit--
-		listY++
-	}
-	start := max(0, s.vaultSelected-limit+1)
+	listY, limit, start := s.vaultListWindow(r)
 	for i := start; i < len(nodes) && i < start+limit; i++ {
 		node, prefix := nodes[i], "  "
 		if i == s.vaultSelected {
@@ -290,6 +291,14 @@ func (s *screen) drawVault(screen tcell.Screen, l layout, ox, oy int) {
 		rowY := listY + i - start
 		printAt(screen, r.x+2, rowY, truncate(prefix+name, r.w-4), color)
 	}
+}
+
+func (s *screen) vaultListWindow(card rect) (listY, limit, start int) {
+	listY, limit = card.y+2, card.h-3
+	if s.vaultFiltering {
+		listY, limit = listY+1, limit-1
+	}
+	return listY, limit, max(0, s.vaultSelected-limit+1)
 }
 
 func (s *screen) filteredVaultNodes() []vault.Node {
@@ -638,9 +647,7 @@ func (s *screen) refreshVault() {
 			return
 		}
 		s.vaultError = "Vault unavailable or folder cannot be opened."
-		s.vaultNodes = nil
-		s.vaultSelected = min(s.vaultSelected, max(0, len(s.vaultDisplayNodes())-1))
-		return
+		nodes = nil
 	}
 	s.vaultNodes = nodes
 	s.vaultSelected = min(s.vaultSelected, max(0, len(s.vaultDisplayNodes())-1))
@@ -668,8 +675,6 @@ func (s *screen) handleVaultInput(event *tcell.EventKey) {
 			s.vaultParent()
 		case 'l':
 			s.openVaultNode()
-		case 'c':
-			s.copyVaultEntry()
 		case 't':
 			s.openThemePanel()
 		}
@@ -1085,12 +1090,7 @@ func (s *screen) vaultRowAt(x, y int, l layout, ox, oy int) int {
 	if x < r.x+1 || x >= r.x+r.w-1 {
 		return -1
 	}
-	listY := r.y + 2
-	limit := r.h - 3
-	if s.vaultFiltering {
-		listY++
-		limit--
-	}
+	listY, limit, start := s.vaultListWindow(r)
 	if limit <= 0 {
 		return -1
 	}
@@ -1098,7 +1098,6 @@ func (s *screen) vaultRowAt(x, y int, l layout, ox, oy int) int {
 	if offset < 0 || offset >= limit {
 		return -1
 	}
-	start := max(0, s.vaultSelected-limit+1)
 	index := start + offset
 	if index < 0 || index >= len(nodes) {
 		return -1
