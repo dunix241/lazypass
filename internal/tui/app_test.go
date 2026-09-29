@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"lazypass/internal/config"
 	"lazypass/internal/vault"
@@ -250,7 +251,7 @@ func TestDrawPaintsEntireViewport(t *testing.T) {
 	}
 }
 
-func TestDrawRendersLiteralShortcutBadges(t *testing.T) {
+func TestDrawUnderlinesOptionShortcuts(t *testing.T) {
 	a := NewApp(config.Defaults(), "", nil)
 	if err := a.screen.regenerate(); err != nil {
 		t.Fatal(err)
@@ -265,10 +266,39 @@ func TestDrawRendersLiteralShortcutBadges(t *testing.T) {
 	a.screen.Draw(sim)
 
 	l := calculateLayout(84, 24)
-	badgeX := l.upper.x + 18
-	cell, _, _ := sim.Get(badgeX, l.upper.y)
-	if cell != "[" {
-		t.Fatalf("shortcut badge starts with %q, want '['", cell)
+	for _, option := range []struct {
+		r       rect
+		initial rune
+	}{
+		{l.upper, 'U'}, {l.lower, 'L'}, {l.numbers, 'N'}, {l.symbols, 'S'}, {l.ambig, 'E'},
+	} {
+		initial, _, style, _ := sim.GetContent(option.r.x+4, option.r.y)
+		_, _, attrs := style.Decompose()
+		if initial != option.initial || attrs&tcell.AttrUnderline == 0 {
+			t.Fatalf("shortcut at %v = %q, attrs %v", option.r, initial, attrs)
+		}
+		var row strings.Builder
+		for xx := option.r.x + 4; xx < option.r.x+option.r.w; xx++ {
+			cell, _, _ := sim.Get(xx, option.r.y)
+			row.WriteString(cell)
+		}
+		if strings.Contains(row.String(), "[") {
+			t.Fatalf("shortcut badge still rendered in %q", row.String())
+		}
+	}
+	for _, r := range []rect{l.upper, l.symbols} {
+		_, _, style, _ := sim.GetContent(r.x+4, r.y)
+		foreground, _, _ := style.Decompose()
+		if foreground != a.screen.colors.text {
+			t.Fatalf("enabled and disabled options should share resting color: %v", foreground)
+		}
+	}
+	a.screen.selected = focusSymbols
+	a.screen.Draw(sim)
+	_, _, style, _ := sim.GetContent(l.symbols.x+4, l.symbols.y)
+	foreground, _, attrs := style.Decompose()
+	if foreground != a.screen.colors.focus || attrs&tcell.AttrUnderline == 0 {
+		t.Fatalf("focused shortcut lost focus color or underline: color %v, attrs %v", foreground, attrs)
 	}
 }
 
@@ -303,7 +333,7 @@ func TestCompactAmbigHidesExample(t *testing.T) {
 	}
 }
 
-func TestToggleDoesNotShiftBadge(t *testing.T) {
+func TestToggleKeepsShortcutUnderlineAligned(t *testing.T) {
 	ambigRow := func(exclude bool) string {
 		c := config.Defaults()
 		c.ExcludeAmbiguous = exclude
@@ -321,6 +351,11 @@ func TestToggleDoesNotShiftBadge(t *testing.T) {
 		a.screen.Draw(sim)
 
 		l := calculateLayout(84, 24)
+		initial, _, style, _ := sim.GetContent(l.ambig.x+4, l.ambig.y)
+		_, _, attrs := style.Decompose()
+		if initial != 'E' || attrs&tcell.AttrUnderline == 0 {
+			t.Fatalf("shortcut not underlined when exclude=%t: %q, attrs %v", exclude, initial, attrs)
+		}
 		var row strings.Builder
 		for xx := l.ambig.x; xx < l.ambig.x+l.ambig.w; xx++ {
 			cell, _, _ := sim.Get(xx, l.ambig.y)
@@ -330,14 +365,8 @@ func TestToggleDoesNotShiftBadge(t *testing.T) {
 	}
 
 	off, on := ambigRow(false), ambigRow(true)
-	badgeCell := func(row string) int {
-		return len([]rune(row[:strings.Index(row, "[E]")]))
-	}
-	if badgeCell(off) != badgeCell(on) {
-		t.Fatalf("toggling E moved its badge: %q vs %q", off, on)
-	}
-	if !strings.Contains(on, "(I l 1 O 0)") || strings.Index(on, "(I l 1 O 0)") > strings.Index(on, "[E]") {
-		t.Fatalf("example should sit before the badge, got %q", on)
+	if !strings.Contains(off, "[ ] Exclude ambiguous (I l 1 O 0)") || !strings.Contains(on, "[✓] Exclude ambiguous (I l 1 O 0)") {
+		t.Fatalf("option label shifted when toggled: %q vs %q", off, on)
 	}
 }
 
@@ -445,6 +474,30 @@ func TestVaultFooterUsesVaultHintsAtEveryWidth(t *testing.T) {
 		text := footer.String()
 		if !strings.Contains(text, "h back") || !strings.Contains(text, "l open/copy") || !strings.Contains(text, "q quit") || strings.Contains(text, "a Add") || strings.Contains(text, "c copy") {
 			t.Fatalf("%d-column Vault footer = %q", width, text)
+		}
+	}
+}
+
+func TestGeneratorFooterShowsOnlyFocusedControlHint(t *testing.T) {
+	a := NewApp(config.Defaults(), "", nil)
+	for _, width := range []int{120, 84, 50, 32} {
+		for _, test := range []struct {
+			focus focus
+			want  string
+			omit  string
+		}{
+			{focusLength, "<left>/<right> length", "<space> toggle"},
+			{focusSymbols, "<space> toggle", "<left>/<right> length"},
+			{focusStore, "", "<space> toggle"},
+		} {
+			a.screen.selected = test.focus
+			footer := a.screen.generatorFooter(width)
+			if utf8.RuneCountInString(footer) > width-2 || !strings.Contains(footer, test.want) || strings.Contains(footer, test.omit) || strings.Contains(footer, "U/L/N/S/E") || strings.Contains(footer, "a Add") {
+				t.Fatalf("width=%d focus=%d footer=%q", width, test.focus, footer)
+			}
+			if width >= 84 && !(strings.Index(footer, "c copy") < strings.Index(footer, "t themes") && strings.Index(footer, "t themes") < strings.Index(footer, "v view")) {
+				t.Fatalf("theme hint should follow copy and precede view: %q", footer)
+			}
 		}
 	}
 }

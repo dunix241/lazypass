@@ -23,7 +23,6 @@ type layout struct {
 }
 
 // compactWidth is the minimum width for two toggle columns.
-// One column needs 21 cells ("[✓] Lowercase [L]") plus card margins.
 const compactWidth = 56
 
 func cardHeight(compact, short bool) int {

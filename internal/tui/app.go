@@ -59,14 +59,14 @@ func WithVault(v service.Service) Option  { return func(s *screen) { s.vault = v
 func WithInitialRoute(route Route) Option { return func(s *screen) { s.route = route } }
 
 const (
-	fullFooter    = "←/→ length  •  U/L/N/S/E toggle  •  Space toggle  •  a Add  •  t themes  •  r regenerate  •  c copy  •  v view  •  q quit"
-	compactFooter = "Tab focus  •  Space toggle  •  a Add  •  t themes  •  r regenerate  •  c copy  •  v view  •  q quit"
-	shortFooter   = "a Add  •  t themes  •  r regenerate  •  c copy  •  v view  •  q quit"
-	minimalFooter = "c copy  •  q quit"
-	vaultFooter   = "h back  •  l open/copy  •  / filter  •  t themes  •  v view  •  q quit"
-	vaultCompact  = "h back  •  l open/copy  •  / filter  •  v view  •  q quit"
-	vaultShort    = "h back  •  l open/copy  •  v view  •  q quit"
-	vaultMinimal  = "h back • l open/copy • q quit"
+	generatorFooterFull    = "<tab> focus  •  a add  •  r regenerate  •  c copy  •  t themes  •  v view  •  q quit"
+	generatorFooterCompact = "a add  •  c copy  •  t themes  •  v view  •  q quit"
+	generatorFooterShort   = "a add  •  v view  •  q quit"
+	generatorFooterMinimal = "q quit"
+	vaultFooter            = "h back  •  l open/copy  •  / filter  •  t themes  •  v view  •  q quit"
+	vaultCompact           = "h back  •  l open/copy  •  / filter  •  v view  •  q quit"
+	vaultShort             = "h back  •  l open/copy  •  v view  •  q quit"
+	vaultMinimal           = "h back • l open/copy • q quit"
 )
 
 // App owns application lifecycle; Screen is responsible for all viewport drawing.
@@ -206,18 +206,9 @@ func (s *screen) Draw(screen tcell.Screen) {
 	} else {
 		s.drawCard(screen, l, x, y)
 	}
-	footer := fullFooter
-	fallbacks := []string{compactFooter, shortFooter, minimalFooter}
+	footer := s.generatorFooter(width)
 	if s.route == VaultRoute {
-		footer = vaultFooter
-		fallbacks = []string{vaultCompact, vaultShort, vaultMinimal}
-	} else if l.compact || l.short {
-		footer = compactFooter
-	}
-	for _, fallback := range fallbacks {
-		if utf8.RuneCountInString(footer) > width-2 {
-			footer = fallback
-		}
+		footer = fitFooter(width, vaultFooter, vaultCompact, vaultShort, vaultMinimal)
 	}
 	printAt(screen, x+max(1, (width-utf8.RuneCountInString(footer))/2), y+height-1, footer, s.colors.muted)
 	if s.themePanel.open {
@@ -226,6 +217,35 @@ func (s *screen) Draw(screen tcell.Screen) {
 	if s.storeForm {
 		s.drawStoreForm(screen, x, y, width, height)
 	}
+}
+
+func (s *screen) generatorFooter(width int) string {
+	contextHint := ""
+	switch s.selected {
+	case focusLength:
+		contextHint = "<left>/<right> length"
+	case focusUpper, focusLower, focusNumbers, focusSymbols, focusAmbiguous:
+		contextHint = "<space> toggle"
+	}
+	bases := []string{generatorFooterFull, generatorFooterCompact, generatorFooterShort, generatorFooterMinimal}
+	if contextHint == "" {
+		return fitFooter(width, bases...)
+	}
+	candidates := make([]string, 0, len(bases)+1)
+	for _, base := range bases {
+		candidates = append(candidates, contextHint+"  •  "+base)
+	}
+	candidates = append(candidates, contextHint)
+	return fitFooter(width, candidates...)
+}
+
+func fitFooter(width int, options ...string) string {
+	for _, option := range options {
+		if utf8.RuneCountInString(option) <= width-2 {
+			return option
+		}
+	}
+	return options[len(options)-1]
 }
 
 func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, width int) {
@@ -461,15 +481,15 @@ func (s *screen) drawCard(screen tcell.Screen, l layout, ox, oy int) {
 	if !l.compact {
 		printAt(screen, r.x+2, charactersY, "Characters", s.colors.muted)
 	}
-	s.drawCheck(screen, l.upper, ox, oy, focusUpper, "Uppercase", "U", s.cfg.Upper)
-	s.drawCheck(screen, l.lower, ox, oy, focusLower, "Lowercase", "L", s.cfg.Lower)
-	s.drawCheck(screen, l.numbers, ox, oy, focusNumbers, "Numbers", "N", s.cfg.Numbers)
-	s.drawCheck(screen, l.symbols, ox, oy, focusSymbols, "Symbols", "S", s.cfg.Symbols)
+	s.drawCheck(screen, l.upper, ox, oy, focusUpper, "Uppercase", s.cfg.Upper)
+	s.drawCheck(screen, l.lower, ox, oy, focusLower, "Lowercase", s.cfg.Lower)
+	s.drawCheck(screen, l.numbers, ox, oy, focusNumbers, "Numbers", s.cfg.Numbers)
+	s.drawCheck(screen, l.symbols, ox, oy, focusSymbols, "Symbols", s.cfg.Symbols)
 	ambigLabel := "Exclude ambiguous (I l 1 O 0)"
 	if l.compact {
 		ambigLabel = "Exclude ambiguous"
 	}
-	s.drawCheck(screen, l.ambig, ox, oy, focusAmbiguous, ambigLabel, "E", s.cfg.ExcludeAmbiguous)
+	s.drawCheck(screen, l.ambig, ox, oy, focusAmbiguous, ambigLabel, s.cfg.ExcludeAmbiguous)
 }
 
 func (s *screen) drawAction(screen tcell.Screen, r rect, ox, oy int, f focus, label string) {
@@ -507,29 +527,20 @@ func (s *screen) drawLength(screen tcell.Screen, r rect, ox, oy int) {
 	printAt(screen, railStart+railWidth+1, r.y, "256", s.colors.muted)
 }
 
-func (s *screen) drawCheck(screen tcell.Screen, r rect, ox, oy int, f focus, label, shortcut string, checked bool) {
+func (s *screen) drawCheck(screen tcell.Screen, r rect, ox, oy int, f focus, label string, checked bool) {
 	r.x += ox
 	r.y += oy
-	mark, color := "[ ]", s.colors.muted
+	mark, color := "[ ]", s.colors.text
 	if checked {
-		mark, color = "[✓]", s.colors.accent
+		mark = "[✓]"
 	}
 	if s.selected == f {
 		color = s.colors.focus
 	}
 	printAt(screen, r.x, r.y, mark+" "+label, color)
-	badgeColor := s.colors.muted
-	if s.selected == f {
-		badgeColor = s.colors.focus
-	}
-	// Rune widths, not bytes: "✓" is 3 bytes but 1 cell, and using len()
-	// would shift the badge every time the box is toggled.
-	textWidth := utf8.RuneCountInString(mark) + 1 + utf8.RuneCountInString(label)
-	badgeX := r.x + 18
-	if badgeX < r.x+textWidth+2 {
-		badgeX = r.x + textWidth + 2
-	}
-	printAt(screen, badgeX, r.y, "["+shortcut+"]", badgeColor)
+	initialX := r.x + 4
+	initial, combining, style, _ := screen.GetContent(initialX, r.y)
+	screen.SetContent(initialX, r.y, initial, combining, style.Underline(true))
 }
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
