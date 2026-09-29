@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -24,6 +25,8 @@ type themePanel struct {
 	mode       themePanelMode
 	names      []string
 	selected   int
+	filtering  bool
+	query      string
 	original   tuiPalette
 	originalID string
 	pending    theme.Palette
@@ -45,12 +48,7 @@ func (s *screen) openThemePanel() {
 		return
 	}
 	p := themePanel{open: true, names: names, original: s.colors, originalID: s.cfg.Theme}
-	for i, name := range names {
-		if name == s.cfg.Theme {
-			p.selected = i
-			break
-		}
-	}
+	p.selected = max(0, slices.Index(names, s.cfg.Theme))
 	if len(names) > 0 {
 		s.previewTheme(&p, names[p.selected])
 	}
@@ -74,7 +72,16 @@ func (s *screen) previewTheme(panel *themePanel, name string) bool {
 
 func (s *screen) handleThemeInput(event *tcell.EventKey) {
 	p := &s.themePanel
+	if p.mode == themePicker && !p.filtering && event.Key() == tcell.KeyRune && event.Rune() == 'q' {
+		s.colors = p.original
+		p.open = false
+		return
+	}
 	if event.Key() == tcell.KeyEscape {
+		if p.mode == themePicker && p.filtering {
+			p.filtering, p.query = false, ""
+			return
+		}
 		s.escapeThemePanel(p)
 		return
 	}
@@ -105,12 +112,7 @@ func (s *screen) escapeThemePanel(p *themePanel) {
 		if p.previewed {
 			s.colors = p.original
 			p.previewed = false
-			for i, name := range p.names {
-				if name == p.originalID {
-					p.selected = i
-					break
-				}
-			}
+			p.selected = max(0, slices.Index(p.names, p.originalID))
 			return
 		}
 		p.open = false
@@ -118,38 +120,31 @@ func (s *screen) escapeThemePanel(p *themePanel) {
 }
 
 func (s *screen) handleThemePicker(event *tcell.EventKey, p *themePanel) {
+	if p.filtering {
+		s.handleThemeFilter(event, p)
+		return
+	}
 	switch event.Key() {
 	case tcell.KeyUp, tcell.KeyBacktab:
-		if len(p.names) > 0 {
-			p.selected = (p.selected - 1 + len(p.names)) % len(p.names)
-			if s.previewTheme(p, p.names[p.selected]) {
-				p.previewed = true
-			}
-		}
+		s.moveThemeSelection(p, -1)
 		return
 	case tcell.KeyDown, tcell.KeyTAB:
-		if len(p.names) > 0 {
-			p.selected = (p.selected + 1) % len(p.names)
-			if s.previewTheme(p, p.names[p.selected]) {
-				p.previewed = true
-			}
-		}
+		s.moveThemeSelection(p, 1)
 		return
 	case tcell.KeyEnter:
-		if len(p.names) == 0 || !s.previewTheme(p, p.names[p.selected]) {
-			return
-		}
-		if err := s.saveTheme(p.names[p.selected]); err != nil {
-			p.error = "Saving config: " + err.Error()
-			return
-		}
-		p.open = false
+		s.applyThemeSelection(p)
 		return
 	}
 	if event.Key() != tcell.KeyRune {
 		return
 	}
 	switch event.Rune() {
+	case '/':
+		p.filtering, p.query = true, ""
+	case 'j':
+		s.moveThemeSelection(p, 1)
+	case 'k':
+		s.moveThemeSelection(p, -1)
 	case 'n':
 		p.mode, p.name, p.nameEdits, p.error = themeName, "", false, ""
 	case 'e':
@@ -162,12 +157,95 @@ func (s *screen) handleThemePicker(event *tcell.EventKey, p *themePanel) {
 		}
 		if s.previewTheme(p, p.names[p.selected]) {
 			p.mode, p.role, p.colorEdits = themeEditor, 0, false
-			p.colorText = paletteColor(p.pending, 0)
+			p.colorText = *paletteRole(&p.pending, 0)
 		}
 	case 'd':
 		if len(p.names) > 0 && !theme.IsBuiltin(p.names[p.selected]) {
 			p.mode, p.error = themeDeleteConfirm, ""
 		}
+	}
+}
+
+func (p *themePanel) matchingThemes() []int {
+	matches := make([]int, 0, len(p.names))
+	query := strings.ToLower(p.query)
+	for i, name := range p.names {
+		if !p.filtering || strings.Contains(strings.ToLower(name), query) {
+			matches = append(matches, i)
+		}
+	}
+	return matches
+}
+
+func (s *screen) updateThemeFilter(p *themePanel, query string) {
+	p.query = query
+	matches := p.matchingThemes()
+	if len(matches) == 0 {
+		return
+	}
+	for _, i := range matches {
+		if i == p.selected {
+			return
+		}
+	}
+	p.selected = matches[0]
+	if s.previewTheme(p, p.names[p.selected]) {
+		p.previewed = true
+	}
+}
+
+func (s *screen) handleThemeFilter(event *tcell.EventKey, p *themePanel) {
+	switch event.Key() {
+	case tcell.KeyUp, tcell.KeyDown, tcell.KeyTAB, tcell.KeyBacktab:
+		delta := 1
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyBacktab {
+			delta = -1
+		}
+		s.moveThemeSelection(p, delta)
+	case tcell.KeyEnter:
+		s.applyThemeSelection(p)
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		if p.query != "" {
+			runes := []rune(p.query)
+			s.updateThemeFilter(p, string(runes[:len(runes)-1]))
+		}
+	case tcell.KeyCtrlU:
+		s.updateThemeFilter(p, "")
+	case tcell.KeyCtrlW:
+		s.updateThemeFilter(p, deletePreviousWord(p.query))
+	case tcell.KeyRune:
+		if event.Rune() >= ' ' {
+			s.updateThemeFilter(p, p.query+string(event.Rune()))
+		}
+	}
+}
+
+func (s *screen) applyThemeSelection(p *themePanel) {
+	if len(p.matchingThemes()) == 0 || !s.previewTheme(p, p.names[p.selected]) {
+		return
+	}
+	if err := s.saveTheme(p.names[p.selected]); err != nil {
+		p.error = "Saving config: " + err.Error()
+		return
+	}
+	p.open = false
+}
+
+func (s *screen) moveThemeSelection(p *themePanel, delta int) {
+	matches := p.matchingThemes()
+	if len(matches) == 0 {
+		return
+	}
+	position := 0
+	for i, index := range matches {
+		if index == p.selected {
+			position = i
+			break
+		}
+	}
+	p.selected = matches[(position+delta+len(matches))%len(matches)]
+	if s.previewTheme(p, p.names[p.selected]) {
+		p.previewed = true
 	}
 }
 
@@ -179,7 +257,8 @@ func (s *screen) handleThemeName(event *tcell.EventKey, p *themePanel) {
 		p.name, p.nameEdits = deletePreviousWord(p.name), true
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(p.name) > 0 {
-			p.name = p.name[:len(p.name)-1]
+			runes := []rune(p.name)
+			p.name = string(runes[:len(runes)-1])
 		}
 	case tcell.KeyEnter:
 		if err := theme.ValidateName(p.name); err != nil {
@@ -190,15 +269,19 @@ func (s *screen) handleThemeName(event *tcell.EventKey, p *themePanel) {
 			p.error = err.Error()
 			return
 		}
-		p.names, _ = theme.List()
-		for i, name := range p.names {
-			if name == p.name {
-				p.selected = i
-				break
-			}
+		names, err := theme.List()
+		if err != nil {
+			p.error = "Listing themes: " + err.Error()
+			return
+		}
+		p.names = names
+		p.selected = slices.Index(p.names, p.name)
+		if p.selected < 0 {
+			p.selected, p.error = 0, "Created theme is missing from the list"
+			return
 		}
 		p.error = ""
-		p.mode, p.role, p.colorEdits, p.colorText = themeEditor, 0, false, paletteColor(p.pending, 0)
+		p.mode, p.role, p.colorEdits, p.colorText = themeEditor, 0, false, *paletteRole(&p.pending, 0)
 	default:
 		if event.Key() == tcell.KeyRune && utf8.RuneCountInString(p.name) < 48 {
 			if !p.nameEdits {
@@ -221,10 +304,10 @@ func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 	switch event.Key() {
 	case tcell.KeyUp:
 		p.role = (p.role - 1 + len(themeRoles)) % len(themeRoles)
-		p.colorText, p.colorEdits = paletteColor(p.pending, p.role), false
+		p.colorText, p.colorEdits = *paletteRole(&p.pending, p.role), false
 	case tcell.KeyDown:
 		p.role = (p.role + 1) % len(themeRoles)
-		p.colorText, p.colorEdits = paletteColor(p.pending, p.role), false
+		p.colorText, p.colorEdits = *paletteRole(&p.pending, p.role), false
 	case tcell.KeyCtrlU:
 		p.colorText, p.colorEdits = "", true
 	case tcell.KeyCtrlW:
@@ -236,7 +319,7 @@ func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 		}
 	case tcell.KeyEnter:
 		candidate := p.pending
-		setPaletteColor(&candidate, p.role, p.colorText)
+		*paletteRole(&candidate, p.role) = p.colorText
 		if err := candidate.Validate(); err != nil {
 			p.error = err.Error()
 			return
@@ -261,37 +344,52 @@ func (s *screen) deleteTheme(p *themePanel) {
 		p.error, p.mode = err.Error(), themePicker
 		return
 	}
-	p.names, _ = theme.List()
-	p.selected, p.mode = 0, themePicker
+	names, err := theme.List()
+	if err != nil {
+		p.names = append(p.names[:p.selected], p.names[p.selected+1:]...)
+		p.error = "Listing themes: " + err.Error()
+	} else {
+		p.names, p.error = names, ""
+	}
+	p.mode, p.previewed = themePicker, false
 	if s.cfg.Theme == name {
 		s.cfg.Theme = theme.DefaultName()
 		s.colors = defaultTUIPalette()
-		s.save()
+		if err := s.saveTheme(s.cfg.Theme); err != nil {
+			p.error = "Saving config: " + err.Error()
+		}
+		p.original, p.originalID = s.colors, s.cfg.Theme
+	} else {
+		s.colors = p.original
+	}
+	p.selected = max(0, slices.Index(p.names, p.originalID))
+	if pending, err := theme.Load(p.originalID); err == nil {
+		p.pending = pending
+	} else {
+		p.error = "Loading theme: " + err.Error()
 	}
 }
 
-func paletteColor(p theme.Palette, role int) string {
-	return []string{p.Base, p.Surface, p.Border, p.Text, p.Muted, p.Accent, p.Focus, p.Warning}[role]
-}
-func setPaletteColor(p *theme.Palette, role int, color string) {
+func paletteRole(p *theme.Palette, role int) *string {
 	switch role {
 	case 0:
-		p.Base = color
+		return &p.Base
 	case 1:
-		p.Surface = color
+		return &p.Surface
 	case 2:
-		p.Border = color
+		return &p.Border
 	case 3:
-		p.Text = color
+		return &p.Text
 	case 4:
-		p.Muted = color
+		return &p.Muted
 	case 5:
-		p.Accent = color
+		return &p.Accent
 	case 6:
-		p.Focus = color
+		return &p.Focus
 	case 7:
-		p.Warning = color
+		return &p.Warning
 	}
+	return nil
 }
 
 func (s *screen) drawThemePanel(screen tcell.Screen, ox, oy, width, height int) {
@@ -303,41 +401,82 @@ func (s *screen) drawThemePanel(screen tcell.Screen, ox, oy, width, height int) 
 	r := rect{ox + (width-w)/2, oy + (height-h)/2, w, h}
 	drawBox(screen, r, s.colors.border, s.colors.surface)
 	printAt(screen, r.x+2, r.y, " Theme ", s.colors.accent)
+	footer := ""
 	if p.mode == themeName {
 		printAt(screen, r.x+2, r.y+2, "Custom theme name:", s.colors.text)
-		printAt(screen, r.x+2, r.y+4, "["+p.name+"]", s.colors.focus)
-		printAt(screen, r.x+2, r.y+h-2, "Enter create  Esc cancel", s.colors.muted)
+		printAt(screen, r.x+2, r.y+4, truncate("["+p.name+"]", w-4), s.colors.focus)
+		footer = "<enter> create"
 	} else if p.mode == themeEditor {
-		printAt(screen, r.x+2, r.y+2, "Edit "+p.names[p.selected], s.colors.text)
+		printAt(screen, r.x+2, r.y+2, truncate("Edit "+p.names[p.selected], w-4), s.colors.text)
 		rows := min(len(themeRoles), h-5)
 		for i := 0; i < rows; i++ {
-			value := paletteColor(p.pending, i)
+			value := *paletteRole(&p.pending, i)
 			color := s.colors.muted
 			if i == p.role {
 				value, color = "["+p.colorText+"]", s.colors.focus
 			}
-			printAt(screen, r.x+2, r.y+3+i, fmt.Sprintf("%-8s %s", themeRoles[i], value), color)
+			printAt(screen, r.x+2, r.y+3+i, truncate(fmt.Sprintf("%-8s %s", themeRoles[i], value), w-4), color)
 		}
-		printAt(screen, r.x+2, r.y+h-2, "Enter validate  s save  Esc back", s.colors.muted)
+		footer = themeHelp(w-4, "<enter> validate  s save", "s save")
 	} else if p.mode == themeDeleteConfirm {
-		printAt(screen, r.x+2, r.y+3, "Delete "+p.names[p.selected]+"? (y/n)", s.colors.warning)
+		printAt(screen, r.x+2, r.y+3, truncate("Delete "+p.names[p.selected]+"? (y/n)", w-4), s.colors.warning)
 	} else {
-		printAt(screen, r.x+2, r.y+2, "Up/Down preview  Enter apply  n new  e edit  d delete", s.colors.muted)
-		rows := min(len(p.names), h-6)
+		if p.filtering {
+			printAt(screen, r.x+2, r.y+2, truncate("Filter: "+p.query+"_", w-4), s.colors.focus)
+		} else {
+			footer = themePickerHelp(w - 4)
+		}
+		matches := p.matchingThemes()
+		listY, limit := r.y+2, h-5
+		if p.filtering {
+			listY, limit = r.y+4, h-7
+		}
+		rows := min(len(matches), limit)
+		position := 0
+		for i, index := range matches {
+			if index == p.selected {
+				position = i
+				break
+			}
+		}
+		start := max(0, position-rows+1)
 		for i := 0; i < rows; i++ {
+			index := matches[start+i]
 			prefix, color := "  ", s.colors.text
-			if i == p.selected {
+			if index == p.selected {
 				prefix, color = "> ", s.colors.focus
 			}
 			kind := "custom"
-			if theme.IsBuiltin(p.names[i]) {
+			if theme.IsBuiltin(p.names[index]) {
 				kind = "built-in"
 			}
-			printAt(screen, r.x+2, r.y+3+i, prefix+p.names[i]+" ("+kind+")", color)
+			printAt(screen, r.x+2, listY+i, truncate(prefix+p.names[index]+" ("+kind+")", w-4), color)
 		}
-		printAt(screen, r.x+2, r.y+h-2, "Esc discard preview, then close", s.colors.muted)
+		if p.filtering {
+			if len(matches) == 0 {
+				printAt(screen, r.x+2, listY, "No matching themes", s.colors.muted)
+			}
+		}
 	}
 	if p.error != "" {
-		printAt(screen, r.x+2, r.y+h-1, truncate(strings.ReplaceAll(p.error, "\n", " "), w-4), s.colors.warning)
+		printAt(screen, r.x+2, r.y+h-2, truncate(strings.ReplaceAll(p.error, "\n", " "), w-4), s.colors.warning)
+	} else if footer != "" {
+		printAt(screen, r.x+2, r.y+h-2, truncate(footer, w-4), s.colors.muted)
 	}
+}
+
+func themePickerHelp(width int) string {
+	return themeHelp(width,
+		"n new  e edit  d delete  / filter",
+		"n/e/d actions  / filter",
+		"/ filter")
+}
+
+func themeHelp(width int, hints ...string) string {
+	for _, hint := range hints {
+		if utf8.RuneCountInString(hint) <= width {
+			return hint
+		}
+	}
+	return hints[len(hints)-1]
 }
