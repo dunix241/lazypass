@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"lazypass/internal/config"
 	"lazypass/internal/theme"
@@ -13,6 +14,15 @@ import (
 
 func themeKey(a *App, key tcell.Key, r rune) {
 	a.screen.InputHandler()(tcell.NewEventKey(key, r, tcell.ModNone), nil)
+}
+
+func panelRowText(sim tcell.SimulationScreen, x, y, width int) string {
+	var row strings.Builder
+	for xx := x; xx < x+width; xx++ {
+		cell, _, _ := sim.Get(xx, y)
+		row.WriteString(cell)
+	}
+	return row.String()
 }
 
 func TestConfiguredThemeAndFallbackAreScreenLocal(t *testing.T) {
@@ -255,11 +265,11 @@ func TestThemePanelErrorStaysInsideBorder(t *testing.T) {
 	sim.SetSize(80, 24)
 	a.screen.SetRect(0, 0, 80, 24)
 	a.screen.Draw(sim)
-	x, y := (80-64)/2+2, (24-15)/2+15-1
-	border, _, _ := sim.Get(x, y)
-	message, _, _ := sim.Get(x, y-1)
-	if border != "─" || message != "T" {
-		t.Fatalf("error overlapped the panel border: border=%q message=%q", border, message)
+	px, py := (80-64)/2, (24-15)/2
+	footerRow := panelRowText(sim, px, py+15-2, 64)
+	border, _, _ := sim.Get(px+2, py+15-1)
+	if border != "─" || !strings.Contains(footerRow, "Theme failed") {
+		t.Fatalf("error overlapped the panel border: border=%q row=%q", border, footerRow)
 	}
 }
 
@@ -277,9 +287,16 @@ func TestThemePanelRendersInsideWideAndCompactViewports(t *testing.T) {
 		w, h := min(64, size[0]-2), min(15, size[1]-2)
 		x, y := (size[0]-w)/2+2, (size[1]-h)/2
 		name, _, _ := sim.Get(x+2, y+2)
-		hint, _, _ := sim.Get(x, y+h-2)
-		if name == " " || hint != themePickerHelp(w - 4)[:1] {
+		if name == " " {
 			t.Fatalf("%dx%d expected theme names above footer hints", size[0], size[1])
+		}
+		px := (size[0] - w) / 2
+		footerRow := panelRowText(sim, px+1, y+h-2, w-2)
+		hint := themePickerHelp(w - 4)
+		leading := strings.Index(footerRow, hint)
+		imbalance := w - 2 - utf8.RuneCountInString(hint) - 2*leading
+		if leading < 1 || imbalance < 0 || imbalance > 1 {
+			t.Fatalf("%dx%d expected centered footer hints, got %q", size[0], size[1], footerRow)
 		}
 		var cells strings.Builder
 		for y := 0; y < size[1]; y++ {

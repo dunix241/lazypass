@@ -475,10 +475,15 @@ func (s *screen) drawThemePanel(screen tcell.Screen, ox, oy, width, height int) 
 		}
 	}
 	if p.error != "" {
-		printAt(screen, r.x+2, r.y+h-2, truncate(strings.ReplaceAll(p.error, "\n", " "), w-4), s.colors.warning)
+		printPanelFooter(screen, r, w, h, strings.ReplaceAll(p.error, "\n", " "), s.colors.warning)
 	} else if footer != "" {
-		printAt(screen, r.x+2, r.y+h-2, truncate(footer, w-4), s.colors.muted)
+		printPanelFooter(screen, r, w, h, footer, s.colors.muted)
 	}
+}
+
+func printPanelFooter(screen tcell.Screen, r rect, w, h int, text string, color tcell.Color) {
+	text = truncate(text, w-4)
+	printAt(screen, r.x+max(1, (w-utf8.RuneCountInString(text))/2), r.y+h-2, text, color)
 }
 
 func themePickerHelp(width int) string {
