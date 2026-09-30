@@ -554,7 +554,12 @@ func (s *screen) drawCheck(screen tcell.Screen, r rect, ox, oy int, f focus, lab
 	}
 	printAt(screen, r.x, r.y, mark+" "+label, color)
 	initialX := r.x + 4
-	initial, combining, style, _ := screen.GetContent(initialX, r.y)
+	cell, style, _ := screen.Get(initialX, r.y)
+	initial, size := utf8.DecodeRuneInString(cell)
+	var combining []rune
+	if size < len(cell) {
+		combining = []rune(cell[size:])
+	}
 	screen.SetContent(initialX, r.y, initial, combining, style.Underline(true))
 }
 

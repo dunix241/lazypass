@@ -417,11 +417,12 @@ func (s *screen) drawThemePanel(screen tcell.Screen, ox, oy, width, height int) 
 	drawBox(screen, r, s.colors.border, s.colors.surface)
 	printAt(screen, r.x+2, r.y, " Theme ", s.colors.accent)
 	footer := ""
-	if p.mode == themeName {
+	switch p.mode {
+	case themeName:
 		printAt(screen, r.x+2, r.y+2, "Custom theme name:", s.colors.text)
 		printAt(screen, r.x+2, r.y+4, truncate("["+p.name+"]", w-4), s.colors.focus)
 		footer = "<enter> create"
-	} else if p.mode == themeEditor {
+	case themeEditor:
 		printAt(screen, r.x+2, r.y+2, truncate("Edit "+p.names[p.selected], w-4), s.colors.text)
 		rows := min(len(themeRoles), h-5)
 		for i := 0; i < rows; i++ {
@@ -433,9 +434,9 @@ func (s *screen) drawThemePanel(screen tcell.Screen, ox, oy, width, height int) 
 			printAt(screen, r.x+2, r.y+3+i, truncate(fmt.Sprintf("%-8s %s", themeRoles[i], value), w-4), color)
 		}
 		footer = themeHelp(w-4, "<enter> validate  s save", "s save")
-	} else if p.mode == themeDeleteConfirm {
+	case themeDeleteConfirm:
 		printAt(screen, r.x+2, r.y+3, truncate("Delete "+p.names[p.selected]+"? (y/n)", w-4), s.colors.warning)
-	} else {
+	default:
 		if p.filtering {
 			printAt(screen, r.x+2, r.y+2, truncate("Filter: "+p.query+"_", w-4), s.colors.focus)
 		} else {

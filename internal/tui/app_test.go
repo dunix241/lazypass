@@ -346,7 +346,8 @@ func TestDrawUnderlinesOptionShortcuts(t *testing.T) {
 	}{
 		{l.upper, 'U'}, {l.lower, 'L'}, {l.numbers, 'N'}, {l.symbols, 'S'}, {l.ambig, 'E'},
 	} {
-		initial, _, style, _ := sim.GetContent(option.r.x+4, option.r.y)
+		cell, style, _ := sim.Get(option.r.x+4, option.r.y)
+		initial, _ := utf8.DecodeRuneInString(cell)
 		_, _, attrs := style.Decompose()
 		if initial != option.initial || attrs&tcell.AttrUnderline == 0 {
 			t.Fatalf("shortcut at %v = %q, attrs %v", option.r, initial, attrs)
@@ -361,7 +362,7 @@ func TestDrawUnderlinesOptionShortcuts(t *testing.T) {
 		}
 	}
 	for _, r := range []rect{l.upper, l.symbols} {
-		_, _, style, _ := sim.GetContent(r.x+4, r.y)
+		_, style, _ := sim.Get(r.x+4, r.y)
 		foreground, _, _ := style.Decompose()
 		if foreground != a.screen.colors.text {
 			t.Fatalf("enabled and disabled options should share resting color: %v", foreground)
@@ -369,7 +370,7 @@ func TestDrawUnderlinesOptionShortcuts(t *testing.T) {
 	}
 	a.screen.selected = focusSymbols
 	a.screen.Draw(sim)
-	_, _, style, _ := sim.GetContent(l.symbols.x+4, l.symbols.y)
+	_, style, _ := sim.Get(l.symbols.x+4, l.symbols.y)
 	foreground, _, attrs := style.Decompose()
 	if foreground != a.screen.colors.focus || attrs&tcell.AttrUnderline == 0 {
 		t.Fatalf("focused shortcut lost focus color or underline: color %v, attrs %v", foreground, attrs)
@@ -425,7 +426,8 @@ func TestToggleKeepsShortcutUnderlineAligned(t *testing.T) {
 		a.screen.Draw(sim)
 
 		l := calculateLayout(84, 24)
-		initial, _, style, _ := sim.GetContent(l.ambig.x+4, l.ambig.y)
+		cell, style, _ := sim.Get(l.ambig.x+4, l.ambig.y)
+		initial, _ := utf8.DecodeRuneInString(cell)
 		_, _, attrs := style.Decompose()
 		if initial != 'E' || attrs&tcell.AttrUnderline == 0 {
 			t.Fatalf("shortcut not underlined when exclude=%t: %q, attrs %v", exclude, initial, attrs)
@@ -618,8 +620,11 @@ func TestGeneratorFooterShowsOnlyFocusedControlHint(t *testing.T) {
 			if utf8.RuneCountInString(footer) > width-2 || !strings.Contains(footer, test.want) || strings.Contains(footer, test.omit) || strings.Contains(footer, "U/L/N/S/E") || strings.Contains(footer, "a Add") {
 				t.Fatalf("width=%d focus=%d footer=%q", width, test.focus, footer)
 			}
-			if width >= 84 && !(strings.Index(footer, "c copy") < strings.Index(footer, "t themes") && strings.Index(footer, "t themes") < strings.Index(footer, "v view")) {
-				t.Fatalf("theme hint should follow copy and precede view: %q", footer)
+			if width >= 84 {
+				copyAt, themesAt, viewAt := strings.Index(footer, "c copy"), strings.Index(footer, "t themes"), strings.Index(footer, "v view")
+				if copyAt >= themesAt || themesAt >= viewAt {
+					t.Fatalf("theme hint should follow copy and precede view: %q", footer)
+				}
 			}
 		}
 	}
