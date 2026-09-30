@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"lazypass/internal/debug"
 	"lazypass/internal/generator"
 	"lazypass/internal/theme"
 
@@ -108,10 +109,12 @@ func Load(path string) (Config, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return Defaults(), nil
 		}
+		debug.Failure("config load", debug.IO)
 		return Defaults(), err
 	}
 	c := Defaults()
 	if err := yaml.Unmarshal(data, &c); err != nil {
+		debug.Failure("config parse", debug.Invalid)
 		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
 	if c.SymbolSet == "" {
@@ -121,6 +124,7 @@ func Load(path string) (Config, error) {
 		c.Theme = theme.DefaultName()
 	}
 	if err := c.ToOptions().Validate(); err != nil {
+		debug.Failure("config validate", debug.Invalid)
 		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
 	return c, nil
@@ -136,20 +140,28 @@ func (c Config) Save(path string) error {
 		path = p
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		debug.Failure("config save directory", debug.IO)
 		return err
 	}
 	var data bytes.Buffer
 	encoder := yaml.NewEncoder(&data)
 	encoder.SetIndent(2)
 	if err := encoder.Encode(c); err != nil {
+		debug.Failure("config encode", debug.Invalid)
 		return err
 	}
 	if err := encoder.Close(); err != nil {
+		debug.Failure("config encode", debug.IO)
 		return err
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data.Bytes(), 0o600); err != nil {
+		debug.Failure("config save file", debug.IO)
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		debug.Failure("config save rename", debug.IO)
+		return err
+	}
+	return nil
 }

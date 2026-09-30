@@ -13,7 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"lazypass/internal/debug"
 	"lazypass/internal/vault"
+
+	"golang.org/x/term"
 )
 
 const commandTimeout = 2 * time.Minute
@@ -22,10 +25,16 @@ type Runner interface {
 	Run(context.Context, string, []string, io.Reader, []string) ([]byte, error)
 }
 
-type ExecRunner struct{}
+type ExecRunner struct{ Terminal io.Reader }
 
-func (ExecRunner) Run(ctx context.Context, name string, args []string, stdin io.Reader, env []string) ([]byte, error) {
+func (r ExecRunner) Run(ctx context.Context, name string, args []string, stdin io.Reader, env []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if stdin == nil {
+		stdin = r.Terminal
+		if stdin == nil {
+			stdin = os.Stdin
+		}
+	}
 	cmd.Stdin = stdin
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.Output()
@@ -66,9 +75,11 @@ func (p *Provider) Status(ctx context.Context) error {
 	}
 	info, err := os.Stat(p.storeDir())
 	if err != nil || !info.IsDir() {
+		debug.Failure("pass status", debug.Unavailable)
 		return vault.ErrUnavailable
 	}
 	if _, err := os.Stat(filepath.Join(p.storeDir(), ".gpg-id")); err != nil {
+		debug.Failure("pass status", debug.Invalid)
 		return vault.ErrUninitialized
 	}
 	return nil
@@ -80,10 +91,12 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 	}
 	root, err := p.safeDirectory(path)
 	if err != nil {
+		logPathFailure("pass list", err)
 		return nil, err
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
+		debug.Failure("pass list", debug.IO)
 		return nil, vault.ErrUnavailable
 	}
 	nodes := make([]vault.Node, 0, len(entries))
@@ -124,13 +137,18 @@ func (p *Provider) Read(ctx context.Context, path vault.Path) (vault.Entry, erro
 		return vault.Entry{}, err
 	}
 	if err := p.safeEntry(path, true); err != nil {
+		logPathFailure("pass show", err)
 		return vault.Entry{}, err
 	}
 	output, err := p.run(ctx, append([]string{"show", "--"}, path.String()), nil)
 	if err != nil {
 		return vault.Entry{}, err
 	}
-	return vault.DecodeEntry(path, string(output))
+	entry, err := vault.DecodeEntry(path, string(output))
+	if err != nil {
+		debug.Failure("pass decode", debug.Invalid)
+	}
+	return entry, err
 }
 
 func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
@@ -138,10 +156,12 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 		return err
 	}
 	if err := p.safeEntry(entry.Path, false); err != nil {
+		logPathFailure("pass insert", err)
 		return err
 	}
 	encoded, err := vault.EncodeEntry(entry)
 	if err != nil {
+		debug.Failure("pass encode", debug.Invalid)
 		return err
 	}
 	_, err = p.run(ctx, append([]string{"insert", "--multiline", "--force", "--"}, entry.Path.String()), strings.NewReader(encoded))
@@ -153,6 +173,7 @@ func (p *Provider) Delete(ctx context.Context, path vault.Path) error {
 		return err
 	}
 	if err := p.safeEntry(path, true); err != nil {
+		logPathFailure("pass remove", err)
 		return err
 	}
 	_, err := p.run(ctx, append([]string{"rm", "--force", "--"}, path.String()), nil)
@@ -171,6 +192,7 @@ func (p *Provider) Sync(ctx context.Context) (vault.SyncResult, error) {
 
 func (p *Provider) run(parent context.Context, args []string, stdin io.Reader) ([]byte, error) {
 	if err := parent.Err(); err != nil {
+		debug.Failure(passOperation(args), contextCause(err))
 		return nil, vault.ErrUnavailable
 	}
 	ctx, cancel := context.WithTimeout(parent, commandTimeout)
@@ -180,23 +202,92 @@ func (p *Provider) run(parent context.Context, args []string, stdin io.Reader) (
 		return output, nil
 	}
 	if ctx.Err() != nil {
+		debug.Failure(passOperation(args), contextCause(ctx.Err()))
 		return nil, vault.ErrUnavailable
 	}
 	message := strings.ToLower(err.Error() + " " + string(output))
+	exitCode := processExitCode(err)
+	var classified error
+	cause := debug.Unknown
 	switch {
 	case strings.Contains(message, "not initialized"):
-		return nil, vault.ErrUninitialized
+		classified = vault.ErrUninitialized
+		cause = debug.Invalid
 	case strings.Contains(message, "executable"), strings.Contains(message, "command not found"):
-		return nil, vault.ErrUnavailable
-	case strings.Contains(message, "not in the password store"), strings.Contains(message, "not found"):
-		return nil, vault.ErrNotFound
+		classified = vault.ErrUnavailable
+		cause = debug.Unavailable
+	case strings.Contains(message, "not in the password store"):
+		classified = vault.ErrNotFound
+		cause = debug.NotFound
 	case strings.Contains(message, "conflict"):
-		return nil, vault.ErrConflict
-	case strings.Contains(message, "gpg"), strings.Contains(message, "secret key"), strings.Contains(message, "decryption"):
-		return nil, vault.ErrLocked
+		classified = vault.ErrConflict
+		cause = debug.Conflict
+	case strings.Contains(message, "gpg"), strings.Contains(message, "secret key"), strings.Contains(message, "pinentry"), strings.Contains(message, "inappropriate ioctl"), strings.Contains(message, "decryption"):
+		reason := gpgReason(message)
+		classified = &GPGFailure{Reason: reason, ExitCode: exitCode}
+		cause = reason.detail().cause
+	case strings.Contains(message, "not found"):
+		classified = vault.ErrNotFound
+		cause = debug.NotFound
 	default:
-		return nil, fmt.Errorf("pass command failed")
+		classified = fmt.Errorf("pass command failed")
 	}
+	if debug.Enabled() {
+		debug.ProcessFailure(passOperation(args), cause, debug.ProcessState{
+			ExitCode: exitCode,
+			StdinTTY: term.IsTerminal(int(os.Stdin.Fd())),
+			GPGTTY:   os.Getenv("GPG_TTY") != "",
+			SSH:      os.Getenv("SSH_TTY") != "",
+			Display:  os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != "",
+		})
+	}
+	return nil, classified
+}
+
+func processExitCode(err error) int {
+	var exit interface{ ExitCode() int }
+	if errors.As(err, &exit) {
+		return exit.ExitCode()
+	}
+	return -1
+}
+
+func contextCause(err error) debug.Cause {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return debug.Timeout
+	}
+	return debug.Canceled
+}
+
+func passOperation(args []string) debug.Operation {
+	if len(args) == 0 {
+		return "pass"
+	}
+	switch args[0] {
+	case "show":
+		return "pass show"
+	case "insert":
+		return "pass insert"
+	case "rm":
+		return "pass remove"
+	case "git":
+		return "pass git"
+	case "--version":
+		return "pass version"
+	default:
+		return "pass"
+	}
+}
+
+func logPathFailure(operation debug.Operation, err error) {
+	cause := debug.Unavailable
+	switch {
+	case errors.Is(err, vault.ErrInvalidPath):
+		cause = debug.Invalid
+	case errors.Is(err, vault.ErrNotFound):
+		cause = debug.NotFound
+	}
+	debug.Failure(operation, cause)
 }
 
 func (p *Provider) storeDir() string {

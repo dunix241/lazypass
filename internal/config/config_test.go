@@ -107,6 +107,46 @@ func TestCorruptFileIsPreservedAndReported(t *testing.T) {
 	}
 }
 
+func TestInvalidConfigDebugLogOmitsContent(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("LAZYPASS_DEBUG", "1")
+	t.Setenv("XDG_STATE_HOME", state)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("secret-value: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected invalid YAML")
+	}
+	data, err := os.ReadFile(filepath.Join(state, "lazypass", "debug.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `operation="config parse" cause="invalid"`) || strings.Contains(string(data), "secret-value") {
+		t.Fatalf("unsafe config diagnostics: %q", data)
+	}
+}
+
+func TestConfigSaveFailureLogsOperation(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("LAZYPASS_DEBUG", "1")
+	t.Setenv("XDG_STATE_HOME", state)
+	parent := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(parent, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Defaults().Save(filepath.Join(parent, "config.yaml")); err == nil {
+		t.Fatal("expected save failure")
+	}
+	data, err := os.ReadFile(filepath.Join(state, "lazypass", "debug.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `operation="config save directory" cause="io"`) {
+		t.Fatalf("save failure not logged: %q", data)
+	}
+}
+
 func TestEnvOverride(t *testing.T) {
 	dir := t.TempDir()
 	custom := filepath.Join(dir, "custom.yaml")

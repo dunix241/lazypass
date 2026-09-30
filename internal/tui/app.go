@@ -12,6 +12,7 @@ import (
 
 	"lazypass/internal/app"
 	"lazypass/internal/config"
+	"lazypass/internal/debug"
 	"lazypass/internal/generator"
 	"lazypass/internal/theme"
 	"lazypass/internal/vault"
@@ -81,8 +82,11 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	if palette, err := theme.Load(cfg.Theme); err == nil {
 		if loaded, err := newTUIPalette(palette); err == nil {
 			s.colors = loaded
+		} else {
+			debug.Failure("theme palette", debug.Invalid)
 		}
 	} else {
+		debug.Failure("theme load", debug.Unavailable)
 		s.notify(notificationWarning, fmt.Sprintf("Theme %q unavailable; using %s", cfg.Theme, theme.DefaultName()))
 	}
 	s.lengthText = strconv.Itoa(cfg.Length)
@@ -146,6 +150,7 @@ type screen struct {
 func (s *screen) regenerate() error {
 	results, err := app.Generate(s.cfg.ToOptions(), 1)
 	if err != nil {
+		debug.Failure("generator regenerate", debug.Unknown)
 		return err
 	}
 	s.password, s.bits, s.strength = results[0].Password, results[0].EntropyBits, results[0].Strength
@@ -253,6 +258,14 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 		statusX := x + width - utf8.RuneCountInString(s.status) - 2
 		if statusX > x+logo.right()+2 {
 			printAt(screen, statusX, y, s.status, s.notificationColor(s.statusLevel))
+		} else {
+			rightWidth := width - logo.right() - 2
+			leftWidth := logo.x - 2
+			if rightWidth >= leftWidth {
+				printAt(screen, x+logo.right()+1, y, truncate(s.status, rightWidth), s.notificationColor(s.statusLevel))
+			} else {
+				printAt(screen, x+1, y, truncate(s.status, leftWidth), s.notificationColor(s.statusLevel))
+			}
 		}
 	}
 }
@@ -657,6 +670,7 @@ func (s *screen) refreshVault() {
 		if s.vault.Provider == nil {
 			return
 		}
+		debug.Failure("vault list", vaultFailureCause(err))
 		s.vaultError = "Vault unavailable or folder cannot be opened."
 		nodes = nil
 	}
@@ -763,7 +777,11 @@ func (s *screen) copyVaultEntry() {
 		return
 	}
 	if err := s.vault.CopyPassword(context.Background(), node.Path); err != nil {
-		s.notify(notificationError, "Copy failed")
+		var diagnostic vault.Diagnostic
+		if !errors.As(err, &diagnostic) {
+			debug.Failure("vault copy", vaultFailureCause(err))
+		}
+		s.notify(notificationError, copyErrorMessage(err))
 		return
 	}
 	s.notify(notificationSuccess, "Copied to clipboard")
@@ -815,6 +833,10 @@ func (s *screen) handleStoreInput(event *tcell.EventKey) {
 			return
 		}
 		if err := s.vault.Store(context.Background(), vault.Entry{Path: path, Password: s.password}); err != nil {
+			var diagnostic vault.Diagnostic
+			if !errors.As(err, &diagnostic) {
+				debug.Failure("vault store", vaultFailureCause(err))
+			}
 			s.notify(notificationError, storeErrorMessage(err))
 			return
 		}
@@ -837,6 +859,7 @@ func (s *screen) refreshStoreSuggestions() {
 	nodes, err := s.vault.List(context.Background(), path)
 	if err != nil {
 		if !errors.Is(err, vault.ErrNotFound) {
+			debug.Failure("vault suggestions", vaultFailureCause(err))
 			s.storeMessage = "Folders cannot be loaded. Type a destination instead."
 		}
 		return
@@ -886,12 +909,58 @@ func (s *screen) insertStoreSuggestion() {
 	s.refreshStoreSuggestions()
 }
 
+func copyErrorMessage(err error) string {
+	var diagnostic vault.Diagnostic
+	if errors.As(err, &diagnostic) {
+		return diagnostic.UserMessage()
+	}
+	switch {
+	case errors.Is(err, vault.ErrLocked):
+		return "Vault locked (no details)"
+	case errors.Is(err, vault.ErrNotFound):
+		return "Vault entry not found"
+	case errors.Is(err, vault.ErrMalformed):
+		return "Vault entry format invalid"
+	case errors.Is(err, vault.ErrUninitialized):
+		return "Vault not initialized"
+	case errors.Is(err, vault.ErrUnavailable):
+		return "Vault unavailable"
+	case errors.Is(err, service.ErrClipboard):
+		return "Clipboard unavailable"
+	default:
+		return "Copy failed"
+	}
+}
+
+func vaultFailureCause(err error) debug.Cause {
+	switch {
+	case errors.Is(err, vault.ErrLocked):
+		return debug.Locked
+	case errors.Is(err, vault.ErrNotFound):
+		return debug.NotFound
+	case errors.Is(err, vault.ErrUninitialized), errors.Is(err, vault.ErrInvalidPath), errors.Is(err, vault.ErrMalformed):
+		return debug.Invalid
+	case errors.Is(err, vault.ErrUnavailable):
+		return debug.Unavailable
+	case errors.Is(err, vault.ErrConflict):
+		return debug.Conflict
+	case errors.Is(err, service.ErrClipboard):
+		return debug.Clipboard
+	default:
+		return debug.Unknown
+	}
+}
+
 func storeErrorMessage(err error) string {
+	var diagnostic vault.Diagnostic
+	if errors.As(err, &diagnostic) {
+		return diagnostic.UserMessage()
+	}
 	switch {
 	case errors.Is(err, vault.ErrUninitialized):
 		return "Vault is not initialized. Run: pass init <recipient>"
 	case errors.Is(err, vault.ErrLocked):
-		return "Vault is locked. Complete the GPG prompt and try again."
+		return "Vault locked (no details)"
 	case errors.Is(err, vault.ErrUnavailable):
 		return "Vault is unavailable. Check pass configuration."
 	default:
@@ -978,7 +1047,8 @@ func (s *screen) activate() {
 func (s *screen) copy() {
 	if s.onCopy != nil {
 		if err := s.onCopy(s.password); err != nil {
-			s.notify(notificationError, "Copy failed")
+			debug.Failure("generator copy", debug.Clipboard)
+			s.notify(notificationError, "Clipboard unavailable")
 			return
 		}
 	}

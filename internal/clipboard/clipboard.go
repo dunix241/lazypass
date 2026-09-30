@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"lazypass/internal/debug"
+
 	"github.com/atotto/clipboard"
 )
 
@@ -29,11 +31,15 @@ func Copy(text string) error {
 		native:   clipboard.WriteAll,
 		lookPath: exec.LookPath,
 		run: func(name string, args []string, text string) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, name, args...)
 			cmd.Stdin = strings.NewReader(text)
-			return cmd.Run()
+			err := cmd.Run()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
 		},
 	})
 }
@@ -41,13 +47,23 @@ func Copy(text string) error {
 func copyWith(text string, deps dependencies) error {
 	var failures []error
 	tryCommand := func(name string, args ...string) bool {
+		operation := debug.Operation("clipboard xclip")
+		if name == "wl-copy" {
+			operation = "clipboard wl-copy"
+		}
 		if _, err := deps.lookPath(name); err != nil {
+			debug.Failure(operation, debug.Unavailable)
 			return false
 		}
 		runErr := deps.run(name, args, text)
 		if runErr == nil {
 			return true
 		}
+		cause := debug.Clipboard
+		if errors.Is(runErr, context.DeadlineExceeded) {
+			cause = debug.Timeout
+		}
+		debug.Failure(operation, cause)
 		failures = append(failures, fmt.Errorf("%s: %w", name, runErr))
 		return false
 	}
@@ -59,6 +75,7 @@ func copyWith(text string, deps dependencies) error {
 	if err := deps.native(text); err == nil {
 		return nil
 	} else {
+		debug.Failure("clipboard native", debug.Clipboard)
 		failures = append(failures, fmt.Errorf("native clipboard: %w", err))
 	}
 	if !deps.wayland && tryCommand("wl-copy") {

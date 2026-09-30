@@ -16,6 +16,7 @@ var (
 	ErrUnavailable   = errors.New("vault is unavailable")
 	ErrUninitialized = errors.New("vault is not initialized")
 	ErrInvalidPath   = errors.New("invalid vault path")
+	ErrMalformed     = errors.New("malformed vault entry")
 )
 
 type Path []string
@@ -65,6 +66,12 @@ type Capabilities struct {
 type SyncResult struct {
 	Pulled bool
 	Pushed bool
+}
+
+// Diagnostic errors provide safe, provider-specific explanations for users.
+type Diagnostic interface {
+	error
+	UserMessage() string
 }
 
 type Provider interface {

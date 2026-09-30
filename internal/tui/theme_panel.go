@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"lazypass/internal/debug"
 	"lazypass/internal/theme"
 
 	"github.com/gdamore/tcell/v2"
@@ -44,6 +45,7 @@ var themeRoles = []string{"base", "surface", "border", "text", "muted", "accent"
 func (s *screen) openThemePanel() {
 	names, err := theme.List()
 	if err != nil {
+		debug.Failure("theme list", debug.IO)
 		s.notify(notificationError, "Unable to list themes")
 		return
 	}
@@ -58,11 +60,13 @@ func (s *screen) openThemePanel() {
 func (s *screen) previewTheme(panel *themePanel, name string) bool {
 	p, err := theme.Load(name)
 	if err != nil {
+		debug.Failure("theme preview load", debug.Invalid)
 		panel.error = fmt.Sprintf("Cannot load %s: %v", name, err)
 		return false
 	}
 	colors, err := newTUIPalette(p)
 	if err != nil {
+		debug.Failure("theme preview palette", debug.Invalid)
 		panel.error = err.Error()
 		return false
 	}
@@ -225,6 +229,7 @@ func (s *screen) applyThemeSelection(p *themePanel) {
 		return
 	}
 	if err := s.saveTheme(p.names[p.selected]); err != nil {
+		debug.Failure("theme apply", debug.IO)
 		p.error = "Saving config: " + err.Error()
 		return
 	}
@@ -262,21 +267,25 @@ func (s *screen) handleThemeName(event *tcell.EventKey, p *themePanel) {
 		}
 	case tcell.KeyEnter:
 		if err := theme.ValidateName(p.name); err != nil {
+			debug.Failure("theme name", debug.Invalid)
 			p.error = err.Error()
 			return
 		}
 		if err := theme.Save(p.name, p.pending); err != nil {
+			debug.Failure("theme create", debug.IO)
 			p.error = err.Error()
 			return
 		}
 		names, err := theme.List()
 		if err != nil {
+			debug.Failure("theme list", debug.IO)
 			p.error = "Listing themes: " + err.Error()
 			return
 		}
 		p.names = names
 		p.selected = slices.Index(p.names, p.name)
 		if p.selected < 0 {
+			debug.Failure("theme create", debug.NotFound)
 			p.selected, p.error = 0, "Created theme is missing from the list"
 			return
 		}
@@ -295,6 +304,7 @@ func (s *screen) handleThemeName(event *tcell.EventKey, p *themePanel) {
 func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 	if event.Key() == tcell.KeyRune && event.Rune() == 's' && !p.colorEdits {
 		if err := theme.Save(p.names[p.selected], p.pending); err != nil {
+			debug.Failure("theme save", debug.IO)
 			p.error = err.Error()
 		} else {
 			p.error = "Saved"
@@ -321,6 +331,7 @@ func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 		candidate := p.pending
 		*paletteRole(&candidate, p.role) = p.colorText
 		if err := candidate.Validate(); err != nil {
+			debug.Failure("theme color", debug.Invalid)
 			p.error = err.Error()
 			return
 		}
@@ -341,11 +352,13 @@ func (s *screen) handleThemeEditor(event *tcell.EventKey, p *themePanel) {
 func (s *screen) deleteTheme(p *themePanel) {
 	name := p.names[p.selected]
 	if err := theme.Delete(name); err != nil {
+		debug.Failure("theme delete", debug.IO)
 		p.error, p.mode = err.Error(), themePicker
 		return
 	}
 	names, err := theme.List()
 	if err != nil {
+		debug.Failure("theme list", debug.IO)
 		p.names = append(p.names[:p.selected], p.names[p.selected+1:]...)
 		p.error = "Listing themes: " + err.Error()
 	} else {
@@ -356,6 +369,7 @@ func (s *screen) deleteTheme(p *themePanel) {
 		s.cfg.Theme = theme.DefaultName()
 		s.colors = defaultTUIPalette()
 		if err := s.saveTheme(s.cfg.Theme); err != nil {
+			debug.Failure("theme fallback save", debug.IO)
 			p.error = "Saving config: " + err.Error()
 		}
 		p.original, p.originalID = s.colors, s.cfg.Theme
@@ -366,6 +380,7 @@ func (s *screen) deleteTheme(p *themePanel) {
 	if pending, err := theme.Load(p.originalID); err == nil {
 		p.pending = pending
 	} else {
+		debug.Failure("theme fallback load", debug.Invalid)
 		p.error = "Loading theme: " + err.Error()
 	}
 }

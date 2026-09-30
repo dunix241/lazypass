@@ -97,6 +97,11 @@ Options live in `~/.config/lazypass/config.yaml` (XDG). `lazypass config path` p
 
 If generate/strength output matters in automation, `--format json` emits one JSON object per line with `password`, `length`, `entropyBits`, and `strength`.
 
+### Diagnostics
+
+Set `LAZYPASS_DEBUG=1` to log failures to `$XDG_STATE_HOME/lazypass/debug.log`
+(default `~/.local/state/lazypass/debug.log`).
+
 ## Install
 
 ```sh

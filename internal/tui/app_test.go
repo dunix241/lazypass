@@ -26,6 +26,12 @@ type memoryVault struct {
 	err   error
 }
 
+type safeDiagnosticError struct{}
+
+func (safeDiagnosticError) Error() string       { return "secret-value in external error" }
+func (safeDiagnosticError) Unwrap() error       { return vault.ErrLocked }
+func (safeDiagnosticError) UserMessage() string { return "GPG: no terminal for pinentry" }
+
 func (m *memoryVault) Name() string                     { return "memory" }
 func (m *memoryVault) Capabilities() vault.Capabilities { return vault.Capabilities{} }
 func (m *memoryVault) List(_ context.Context, path vault.Path) ([]vault.Node, error) {
@@ -142,8 +148,76 @@ func TestCopyStatusReflectsClipboardOutcome(t *testing.T) {
 	failure := NewApp(config.Defaults(), "", func(string) error { return errors.New("no clipboard") })
 	failure.screen.password = "password"
 	failure.screen.copy()
-	if failure.screen.status != "Copy failed" || failure.screen.statusLevel != notificationError {
+	if failure.screen.status != "Clipboard unavailable" || failure.screen.statusLevel != notificationError {
 		t.Fatalf("failure notification = %q/%d", failure.screen.status, failure.screen.statusLevel)
+	}
+}
+
+func TestCopyErrorMessageMapsFailureCauses(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{vault.ErrLocked, "Vault locked (no details)"},
+		{safeDiagnosticError{}, "GPG: no terminal for pinentry"},
+		{vault.ErrNotFound, "Vault entry not found"},
+		{vault.ErrMalformed, "Vault entry format invalid"},
+		{vault.ErrUninitialized, "Vault not initialized"},
+		{vault.ErrUnavailable, "Vault unavailable"},
+		{service.ErrClipboard, "Clipboard unavailable"},
+		{errors.New("write failed"), "Copy failed"},
+	} {
+		if got := copyErrorMessage(test.err); got != test.want {
+			t.Fatalf("copyErrorMessage(%v) = %q, want %q", test.err, got, test.want)
+		}
+	}
+	if got := storeErrorMessage(safeDiagnosticError{}); got != "GPG: no terminal for pinentry" {
+		t.Fatalf("store diagnostic = %q", got)
+	}
+}
+
+func TestVaultCopyFailureLogsOnlyClassifiedCause(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("LAZYPASS_DEBUG", "1")
+	t.Setenv("XDG_STATE_HOME", state)
+	p := &memoryVault{nodes: map[string][]vault.Node{
+		"": {{Name: "mail", Path: vault.Path{"mail"}, Kind: vault.EntryNode}},
+	}, read: map[string]vault.Entry{"mail": {Password: "secret-value"}}}
+	a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: p, Copy: func(string) error { return errors.New("secret-value in failure") }}), WithInitialRoute(VaultRoute))
+	if err := a.Init(); err != nil {
+		t.Fatal(err)
+	}
+	a.screen.copyVaultEntry()
+	if a.screen.status != "Clipboard unavailable" {
+		t.Fatalf("notification = %q", a.screen.status)
+	}
+	log, err := os.ReadFile(filepath.Join(state, "lazypass", "debug.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(log), `cause="clipboard"`) || strings.Contains(string(log), "secret-value") {
+		t.Fatalf("unsafe debug log: %q", log)
+	}
+}
+
+func TestNarrowStatusRemainsVisible(t *testing.T) {
+	a := NewApp(config.Defaults(), "", nil)
+	a.screen.notify(notificationError, "Clipboard unavailable")
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer sim.Fini()
+	sim.SetSize(50, 18)
+	a.screen.SetRect(0, 0, 50, 18)
+	a.screen.Draw(sim)
+	var row strings.Builder
+	for x := 0; x < 50; x++ {
+		cell, _, _ := sim.Get(x, 0)
+		row.WriteString(cell)
+	}
+	if !strings.Contains(row.String(), "Clipboard") {
+		t.Fatalf("notification hidden behind logo: %q", row.String())
 	}
 }
 

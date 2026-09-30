@@ -15,6 +15,7 @@ import (
 	"lazypass/internal/build"
 	"lazypass/internal/clipboard"
 	"lazypass/internal/config"
+	"lazypass/internal/debug"
 	"lazypass/internal/theme"
 	"lazypass/internal/tui"
 	"lazypass/internal/util"
@@ -141,7 +142,11 @@ func runTUIRoute(cmd *cobra.Command, route tui.Route) error {
 	if err := ui.Init(); err != nil {
 		return err
 	}
-	return ui.Run()
+	if err := ui.Run(); err != nil {
+		debug.Failure("tui run", debug.IO)
+		return err
+	}
+	return nil
 }
 
 func runGenerate(cmd *cobra.Command, _ []string) error {
@@ -162,6 +167,7 @@ func runGenerate(cmd *cobra.Command, _ []string) error {
 	}
 	results, err := app.Generate(opts, count)
 	if err != nil {
+		debug.Failure("generator cli", debug.Unknown)
 		return usage(err)
 	}
 	format := "text"
@@ -233,6 +239,7 @@ func runConfigShow(cmd *cobra.Command, _ []string) error {
 func runThemeList(cmd *cobra.Command, _ []string) error {
 	names, err := theme.List()
 	if err != nil {
+		debug.Failure("theme list cli", debug.IO)
 		return err
 	}
 	for _, name := range names {
@@ -255,6 +262,7 @@ func runThemePath(cmd *cobra.Command, _ []string) error {
 func runThemeShow(cmd *cobra.Command, args []string) error {
 	palette, err := theme.Load(args[0])
 	if err != nil {
+		debug.Failure("theme show cli", debug.Invalid)
 		return err
 	}
 	data, err := yaml.Marshal(palette)
@@ -428,6 +436,7 @@ func vaultService(cmd *cobra.Command) (service.Service, error) {
 func vaultServiceForConfig(cfg config.Config) (service.Service, error) {
 	s, ok := configuredVaultService(cfg)
 	if !ok {
+		debug.Failure("vault setup cli", debug.Unavailable)
 		return service.Service{}, vault.ErrUnavailable
 	}
 	return s, nil

@@ -65,14 +65,11 @@ func DecodeEntry(path Path, text string) (Entry, error) {
 	}
 	text = strings.TrimSuffix(text, "\n")
 	lines := strings.Split(text, "\n")
-	if len(lines) == 0 {
-		return Entry{}, fmt.Errorf("malformed vault entry")
-	}
 	entry := Entry{Path: append(Path(nil), path...), Password: strings.TrimSuffix(lines[0], "\r"), Fields: map[string]string{}}
 	for _, line := range lines[1:] {
 		key, value, ok := strings.Cut(strings.TrimSuffix(line, "\r"), ": ")
 		if !ok || key == "" {
-			return Entry{}, fmt.Errorf("malformed vault entry")
+			return Entry{}, ErrMalformed
 		}
 		switch key {
 		case "Username":

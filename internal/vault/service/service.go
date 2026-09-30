@@ -3,10 +3,12 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"lazypass/internal/vault"
 )
+
+var ErrClipboard = errors.New("clipboard unavailable")
 
 type Service struct {
 	Provider vault.Provider
@@ -46,13 +48,16 @@ func (s Service) Store(ctx context.Context, entry vault.Entry) error {
 
 func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
 	if s.Copy == nil {
-		return fmt.Errorf("clipboard unavailable")
+		return ErrClipboard
 	}
 	entry, err := s.Show(ctx, path)
 	if err != nil {
 		return err
 	}
-	return s.Copy(entry.Password)
+	if err := s.Copy(entry.Password); err != nil {
+		return ErrClipboard
+	}
+	return nil
 }
 
 func (s Service) Sync(ctx context.Context) (vault.SyncResult, error) {
