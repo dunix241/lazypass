@@ -478,6 +478,55 @@ func TestVaultBrowseAndCopy(t *testing.T) {
 	}
 }
 
+func TestVaultCopyReleasesTerminalForPrompts(t *testing.T) {
+	p := &memoryVault{nodes: map[string][]vault.Node{
+		"": {{Name: "mail", Path: vault.Path{"mail"}, Kind: vault.EntryNode}},
+	}, read: map[string]vault.Entry{"mail": {Password: "secret"}}}
+	var copied string
+	a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: p, Copy: func(password string) error { copied = password; return nil }}), WithInitialRoute(VaultRoute))
+	if err := a.Init(); err != nil {
+		t.Fatal(err)
+	}
+	if a.screen.suspend == nil {
+		t.Fatal("screen should wire terminal suspension by default")
+	}
+	var suspended bool
+	a.screen.suspend = func(fn func()) bool { suspended = true; fn(); return true }
+	a.screen.copyVaultEntry()
+	if !suspended {
+		t.Fatal("vault copy should release the terminal for pinentry")
+	}
+	if copied != "secret" || a.screen.status != "Copied to clipboard" {
+		t.Fatalf("copy=%q status=%q", copied, a.screen.status)
+	}
+}
+
+func TestVaultCopyFallsBackWithoutSuspend(t *testing.T) {
+	vaultApp := func() (*App, *string) {
+		p := &memoryVault{nodes: map[string][]vault.Node{
+			"": {{Name: "mail", Path: vault.Path{"mail"}, Kind: vault.EntryNode}},
+		}, read: map[string]vault.Entry{"mail": {Password: "secret"}}}
+		var copied string
+		a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: p, Copy: func(password string) error { copied = password; return nil }}), WithInitialRoute(VaultRoute))
+		if err := a.Init(); err != nil {
+			t.Fatal(err)
+		}
+		return a, &copied
+	}
+	a, copied := vaultApp()
+	a.screen.suspend = func(fn func()) bool { fn(); return false }
+	a.screen.copyVaultEntry()
+	if *copied != "secret" {
+		t.Fatal("copy should run directly when suspension is refused")
+	}
+	a, copied = vaultApp()
+	a.screen.suspend = nil
+	a.screen.copyVaultEntry()
+	if *copied != "secret" {
+		t.Fatal("copy should run directly without a suspend hook")
+	}
+}
+
 func TestCopyConfirmationDoesNotBlockVaultNavigation(t *testing.T) {
 	p := &memoryVault{nodes: map[string][]vault.Node{
 		"": {{Name: "first", Path: vault.Path{"first"}, Kind: vault.EntryNode}, {Name: "second", Path: vault.Path{"second"}, Kind: vault.EntryNode}},

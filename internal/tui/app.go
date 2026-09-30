@@ -95,6 +95,7 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	}
 	app := tview.NewApplication().EnableMouse(true)
 	s.quit = app.Stop
+	s.suspend = app.Suspend
 	return &App{app: app, screen: s}
 }
 
@@ -129,6 +130,7 @@ type screen struct {
 	statusTill     time.Time
 	statusLevel    notificationLevel
 	quit           func()
+	suspend        func(func()) bool
 	draggingSlider bool
 	colors         tuiPalette
 	themePanel     themePanel
@@ -771,12 +773,26 @@ func (s *screen) openVaultNode() {
 	s.copyVaultEntry()
 }
 
+// runPrompted executes fn with the terminal released while the app is
+// running, so subprocesses that need pinentry get a usable TTY. It falls
+// back to a direct call when suspension is unavailable.
+func (s *screen) runPrompted(fn func() error) error {
+	if s.suspend == nil {
+		return fn()
+	}
+	var err error
+	if !s.suspend(func() { err = fn() }) {
+		return fn()
+	}
+	return err
+}
+
 func (s *screen) copyVaultEntry() {
 	node, ok := s.selectedVaultNode()
 	if !ok || node.Kind != vault.EntryNode {
 		return
 	}
-	if err := s.vault.CopyPassword(context.Background(), node.Path); err != nil {
+	if err := s.runPrompted(func() error { return s.vault.CopyPassword(context.Background(), node.Path) }); err != nil {
 		var diagnostic vault.Diagnostic
 		if !errors.As(err, &diagnostic) {
 			debug.Failure("vault copy", vaultFailureCause(err))
