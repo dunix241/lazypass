@@ -7,16 +7,16 @@ import (
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return s.WrapInputHandler(func(event *tcell.EventKey, _ func(tview.Primitive)) {
-		if s.themePanel.open {
-			s.handleThemeInput(event)
+		if s.overlay == themeOverlay {
+			s.themePanel.HandleKey(event)
 			return
 		}
-		if s.storeForm {
-			s.handleStoreInput(event)
+		if s.overlay == storeOverlay {
+			s.store.HandleKey(event)
 			return
 		}
-		if s.route == VaultRoute && s.vaultFiltering {
-			s.handleVaultFilterInput(event)
+		if s.route == VaultRoute && s.vault.IsFiltering() {
+			s.vault.HandleKey(event)
 			return
 		}
 		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
@@ -29,76 +29,9 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			return
 		}
 		if s.route == VaultRoute {
-			s.handleVaultInput(event)
+			s.vault.HandleKey(event)
 			return
 		}
-		switch event.Key() {
-		case tcell.KeyTAB, tcell.KeyDown:
-			s.move(1)
-			return
-		case tcell.KeyBacktab, tcell.KeyUp:
-			s.move(-1)
-			return
-		case tcell.KeyLeft:
-			s.selected = focusLength
-			s.adjustLength(-1)
-			return
-		case tcell.KeyRight:
-			s.selected = focusLength
-			s.adjustLength(1)
-			return
-		case tcell.KeyEnter:
-			s.activate()
-			return
-		case tcell.KeyBackspace, tcell.KeyBackspace2:
-			if s.selected == focusLength && len(s.lengthText) > 0 {
-				s.lengthText = s.lengthText[:len(s.lengthText)-1]
-			}
-			return
-		}
-		if event.Key() != tcell.KeyRune {
-			return
-		}
-		switch event.Rune() {
-		case 'U', 'u':
-			s.selected = focusUpper
-			s.activate()
-		case 'L', 'l':
-			s.selected = focusLower
-			s.activate()
-		case 'N', 'n':
-			s.selected = focusNumbers
-			s.activate()
-		case 'S', 's':
-			s.selected = focusSymbols
-			s.activate()
-		case 'a':
-			s.openStoreForm()
-		case 'E', 'e':
-			s.selected = focusAmbiguous
-			s.activate()
-		case 'j':
-			s.move(1)
-		case 'k':
-			s.move(-1)
-		case '-':
-			s.selected = focusLength
-			s.adjustLength(-1)
-		case '+':
-			s.selected = focusLength
-			s.adjustLength(1)
-		case ' ':
-			s.activate()
-		case 'r':
-			_ = s.regenerate()
-		case 'c':
-			s.copy()
-		case 't':
-			s.openThemePanel()
-		default:
-			if s.selected == focusLength && event.Rune() >= '0' && event.Rune() <= '9' {
-				s.typeLength(event.Rune())
-			}
-		}
+		s.generator.HandleKey(event, s.frame())
 	})
 }

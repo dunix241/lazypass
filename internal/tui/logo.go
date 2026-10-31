@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/gdamore/tcell/v2"
+import (
+	"lazypass/internal/tui/shared"
+
+	"github.com/gdamore/tcell/v2"
+)
 
 type logoStyle uint8
 
@@ -34,9 +38,9 @@ func logoFits(width, height, logoH int) bool {
 	return cardY+cardH <= height-1
 }
 
-func drawLogo(screen tcell.Screen, logo logoLayout, ox, oy int, colors tuiPalette) {
+func drawLogo(screen tcell.Screen, logo logoLayout, ox, oy int, colors shared.Palette) {
 	if logo.style == logoWordmark {
-		printAt(screen, ox+logo.x, oy+logo.y, "lazypass", colors.accent)
+		shared.PrintAt(screen, ox+logo.x, oy+logo.y, "lazypass", colors.Accent)
 	}
 }
 

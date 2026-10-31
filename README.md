@@ -9,7 +9,7 @@ Interactive local password generator for the terminal. `lazypass` opens an inter
 - Options save automatically and are reused next time; inspect with `config path` / `config show`.
 - Generation uses the OS cryptographic random source via `crypto/rand`, so every character is equally likely. One character per enabled class is guaranteed.
 - Ambiguous-character filter (`I l 1 O 0`) and custom symbol set.
-- Copy goes straight to the clipboard (`wl-copy`, `xclip`, or native) and is never printed.
+- Copy uses the system clipboard locally and the terminal clipboard (OSC 52) over SSH.
 - JSON output (`generate --format json`) with password, length, entropy bits, and strength.
 - Layout adapts to narrow or short terminals (minimum 32×18), mouse input supported.
 - Optional encrypted vault with pluggable backends (`pass` included), folder-organized entries, and Git sync.
@@ -97,6 +97,17 @@ Options live in `~/.config/lazypass/config.yaml` (XDG). `lazypass config path` p
 
 If generate/strength output matters in automation, `--format json` emits one JSON object per line with `password`, `length`, `entropyBits`, and `strength`.
 
+### Clipboard
+
+Clipboard copy needs `wl-copy` (Wayland) or `xclip` (X11) on Linux; macOS and Windows use their native tooling.
+
+Over SSH, copy uses OSC 52 to write to your **client terminal's clipboard**.
+Use an interactive session (`ssh -t host`) and a terminal that permits OSC 52
+clipboard writes. No remote display server or `wl-copy` is required. When
+lazypass runs inside remote tmux, enable `set -g allow-passthrough on` in that
+tmux server's configuration. A local tmux layer must also support clipboard
+forwarding (for example, `set -g set-clipboard on`).
+
 ### Diagnostics
 
 Set `LAZYPASS_DEBUG=1` to log failures to `$XDG_STATE_HOME/lazypass/debug.log`
@@ -115,7 +126,3 @@ go install github.com/dunix241/lazypass@latest
 ```
 
 Or build from source: `make build` (binary lands in `.build/lazypass`). Prebuilt archives for Linux, macOS, and Windows (x86_64, arm64) are attached to GitHub releases. For Arch, `packaging/aur` documents the `lazypass-bin` package update flow.
-
-Clipboard copy needs `wl-copy` (Wayland) or `xclip` (X11) on Linux; macOS and Windows use their native tooling.
-
-Copied passwords go straight to the clipboard and are never printed to stdout.

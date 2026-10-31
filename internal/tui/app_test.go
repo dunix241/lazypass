@@ -21,12 +21,6 @@ type memoryVault struct {
 	err   error
 }
 
-type safeDiagnosticError struct{}
-
-func (safeDiagnosticError) Error() string       { return "secret-value in external error" }
-func (safeDiagnosticError) Unwrap() error       { return vault.ErrLocked }
-func (safeDiagnosticError) UserMessage() string { return "GPG: no terminal for pinentry" }
-
 func (m *memoryVault) Name() string                     { return "memory" }
 func (m *memoryVault) Capabilities() vault.Capabilities { return vault.Capabilities{} }
 func (m *memoryVault) List(_ context.Context, path vault.Path) ([]vault.Node, error) {
@@ -60,14 +54,19 @@ func TestInitialRenderDoesNotCreateConfig(t *testing.T) {
 
 func TestRouteSwitchPreservesGeneratorState(t *testing.T) {
 	a := NewApp(config.Defaults(), "", nil, WithInitialRoute(VaultRoute))
+	if err := a.Init(); err != nil {
+		t.Fatal(err)
+	}
 	if a.CurrentRoute() != VaultRoute {
 		t.Fatal("initial route should be vault")
 	}
 	a.screen.switchRoute()
-	a.screen.selected = focusSymbols
+	a.screen.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 's', tcell.ModNone), nil)
+	before := a.screen.generator.Footer(120)
+	password, options := a.CurrentPassword(), a.CurrentOptions()
 	a.screen.switchRoute()
 	a.screen.switchRoute()
-	if a.CurrentRoute() != GeneratorRoute || a.screen.selected != focusSymbols {
+	if a.CurrentRoute() != GeneratorRoute || a.screen.generator.Footer(120) != before || a.CurrentPassword() != password || a.CurrentOptions() != options {
 		t.Fatal("generator state should survive route switching")
 	}
 }

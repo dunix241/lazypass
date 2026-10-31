@@ -36,7 +36,7 @@ func TestLogoNeverOverlapsCardOrFooter(t *testing.T) {
 	for _, size := range [][2]int{{84, 24}, {64, 20}, {50, 18}, {84, 18}} {
 		width, height := size[0], size[1]
 		a := NewApp(config.Defaults(), "", nil)
-		if err := a.screen.regenerate(); err != nil {
+		if err := a.screen.generator.Regenerate(); err != nil {
 			t.Fatal(err)
 		}
 		sim := tcell.NewSimulationScreen("UTF-8")
@@ -50,7 +50,7 @@ func TestLogoNeverOverlapsCardOrFooter(t *testing.T) {
 
 		logo := calculateLogoLayout(width, height)
 		card := calculateLayout(width, height).card
-		if card.y < logo.y+logo.h {
+		if card.Y < logo.y+logo.h {
 			t.Fatalf("%dx%d card overlaps logo: card=%+v logo=%+v", width, height, card, logo)
 		}
 		if logo.style == logoWordmark {
