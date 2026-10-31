@@ -1,13 +1,12 @@
-// Package util holds XDG paths and TTY detection.
+// Package util provides terminal detection and private file writes.
 package util
 
-import "os"
+import (
+	"golang.org/x/term"
+	"os"
+)
 
-// IsTerminal reports whether f is a character device (TTY).
+// IsTerminal reports whether f is an actual terminal, rather than any character device.
 func IsTerminal(f *os.File) bool {
-	fi, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
+	return f != nil && term.IsTerminal(int(f.Fd()))
 }

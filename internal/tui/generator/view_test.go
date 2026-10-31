@@ -11,6 +11,17 @@ import (
 	"unicode/utf8"
 )
 
+func TestActionClickDoesNotRetainMouseCapture(t *testing.T) {
+	opened := false
+	v := New(config.Defaults().ToOptions(), Dependencies{OpenStore: func() { opened = true }})
+	frame := testFrame(false, false)
+	l := calculateLayout(frame)
+	result := v.HandleMouse(tview.MouseLeftClick, tcell.NewEventMouse(l.store.x, l.store.y, tcell.Button1, tcell.ModNone), frame)
+	if !opened || !result.Consumed || result.Capture {
+		t.Fatal("Add action retained mouse capture after opening overlay")
+	}
+}
+
 func testFrame(compact, short bool) shared.Frame {
 	w, h := 72, 17
 	if compact {
@@ -157,7 +168,7 @@ func TestGeneratorFooterShowsOnlyFocusedControlHint(t *testing.T) {
 		for _, test := range []struct {
 			focus      focus
 			want, omit string
-		}{{focusLength, "<left>/<right> length", "<space> toggle"}, {focusSymbols, "<space> toggle", "<left>/<right> length"}, {focusStore, "", "<space> toggle"}} {
+		}{{focusLength, "←/→ length", "<space> toggle"}, {focusSymbols, "<space> toggle", "←/→ length"}, {focusStore, "", "<space> toggle"}} {
 			v.selected = test.focus
 			footer := v.Footer(width)
 			if utf8.RuneCountInString(footer) > width-2 || !strings.Contains(footer, test.want) || strings.Contains(footer, test.omit) {

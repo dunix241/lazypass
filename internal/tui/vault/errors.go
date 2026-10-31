@@ -56,6 +56,12 @@ func storeErrorMessage(err error) string {
 		return diagnostic.UserMessage()
 	}
 	switch {
+	case errors.Is(err, vault.ErrUnsupported):
+		return "This vault does not support empty folders"
+	case errors.Is(err, vault.ErrConflict):
+		return "Destination already exists"
+	case errors.Is(err, vault.ErrInvalidPath):
+		return "Invalid vault destination"
 	case errors.Is(err, vault.ErrUninitialized):
 		return "Vault is not initialized. Run: pass init <recipient>"
 	case errors.Is(err, vault.ErrLocked):

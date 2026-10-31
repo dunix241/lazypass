@@ -45,6 +45,7 @@ func (s *View) setLength(n int) {
 }
 
 func (s *View) activate() {
+	previous := s.cfg
 	switch s.selected {
 	case focusUpper:
 		s.cfg.Upper = !s.cfg.Upper
@@ -71,16 +72,7 @@ func (s *View) activate() {
 		return
 	}
 	if !s.cfg.Upper && !s.cfg.Lower && !s.cfg.Numbers && !s.cfg.Symbols {
-		switch s.selected {
-		case focusUpper:
-			s.cfg.Upper = true
-		case focusLower:
-			s.cfg.Lower = true
-		case focusNumbers:
-			s.cfg.Numbers = true
-		case focusSymbols:
-			s.cfg.Symbols = true
-		}
+		s.cfg = previous
 		s.notify(shared.Warning, "Enable at least one character type")
 		return
 	}

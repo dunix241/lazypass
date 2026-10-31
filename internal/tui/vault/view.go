@@ -8,10 +8,14 @@ import (
 
 type Dependencies struct {
 	Service     service.Service
-	RunPrompted func(func() error) error
+	RunPrompted PromptRunner
 	Notify      func(shared.Level, string)
 	OpenThemes  func()
+	OpenAdd     func()
+	OpenEdit    func(vault.Path)
 }
+
+func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
 	vault          service.Service
@@ -21,8 +25,13 @@ type View struct {
 	vaultError     string
 	vaultFilter    string
 	vaultFiltering bool
+	searchNodes    []vault.Node
+	searchLoaded   bool
 	deps           Dependencies
+	deleteTarget   *vault.Node
 }
+
+func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }
 
 func New(deps Dependencies) *View { return &View{vault: deps.Service, deps: deps} }
 func (s *View) IsFiltering() bool { return s.vaultFiltering }

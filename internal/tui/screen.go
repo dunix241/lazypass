@@ -2,17 +2,18 @@ package tui
 
 import (
 	"time"
-	"unicode/utf8"
 
 	"lazypass/internal/config"
 	generatorui "lazypass/internal/tui/generator"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/tui/themepanel"
 	vaultui "lazypass/internal/tui/vault"
+	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/rivo/uniseg"
 )
 
 type overlay uint8
@@ -53,7 +54,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 	l := calculateLayout(width, height)
 	if l.tooSmall {
 		message := shared.Truncate("Resize terminal (min 32x18)", max(0, width-2))
-		shared.PrintAt(screen, x+max(1, (width-utf8.RuneCountInString(message))/2), y+height/2, message, s.colors.Warning)
+		shared.PrintAt(screen, x+max(1, (width-uniseg.StringWidth(message))/2), y+height/2, message, s.colors.Warning)
 		return
 	}
 	frame := s.frameFrom(l)
@@ -68,7 +69,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.generator.Draw(screen, frame)
 		footer = s.generator.Footer(width)
 	}
-	shared.PrintAt(screen, x+max(1, (width-utf8.RuneCountInString(footer))/2), y+height-1, footer, s.colors.Muted)
+	shared.PrintAt(screen, x+max(1, (width-uniseg.StringWidth(footer))/2), y+height-1, footer, s.colors.Muted)
 	switch s.overlay {
 	case themeOverlay:
 		s.themePanel.Draw(screen, frame)
@@ -105,21 +106,27 @@ func (s *screen) frameFrom(l layout) shared.Frame {
 }
 
 func (s *screen) openStoreForm() {
-	if s.overlay != noOverlay {
-		return
-	}
-	s.generator.ReleaseMouse()
-	if s.store.Open() {
-		s.overlay = storeOverlay
-	}
+	s.openOverlay(storeOverlay, s.store.Open)
 }
 
 func (s *screen) openThemePanel() {
+	s.openOverlay(themeOverlay, s.themePanel.Open)
+}
+
+func (s *screen) openVaultAdd() {
+	s.openOverlay(storeOverlay, func() bool { return s.store.OpenAdd(s.vault.CurrentPath()) })
+}
+
+func (s *screen) openVaultEdit(path vault.Path) {
+	s.openOverlay(storeOverlay, func() bool { return s.store.OpenEdit(path) })
+}
+
+func (s *screen) openOverlay(kind overlay, open func() bool) {
 	if s.overlay != noOverlay {
 		return
 	}
 	s.generator.ReleaseMouse()
-	if s.themePanel.Open() {
-		s.overlay = themeOverlay
+	if open() {
+		s.overlay = kind
 	}
 }

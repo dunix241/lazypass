@@ -8,6 +8,9 @@ import (
 )
 
 func (s *View) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, frame shared.Frame) shared.MouseResult {
+	if s.IsConfirmingDelete() {
+		return shared.MouseResult{Consumed: true, Capture: true}
+	}
 	consume := shared.MouseResult{Consumed: true, Capture: true}
 	switch action {
 	case tview.MouseScrollUp:

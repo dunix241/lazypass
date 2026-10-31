@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"fmt"
 	"strconv"
 
 	"lazypass/internal/theme"
@@ -14,13 +13,13 @@ type Palette struct {
 }
 
 func NewPalette(p theme.Palette) (Palette, error) {
+	if err := p.Validate(); err != nil {
+		return Palette{}, err
+	}
 	values := []string{p.Base, p.Surface, p.Border, p.Text, p.Muted, p.Accent, p.Focus, p.Warning}
 	var colors [8]tcell.Color
 	for i, value := range values {
-		if len(value) != 7 || value[0] != '#' {
-			return Palette{}, fmt.Errorf("invalid color %q", value)
-		}
-		n, err := strconv.ParseInt(value[1:], 16, 32)
+		n, err := strconv.ParseUint(value[1:], 16, 24)
 		if err != nil {
 			return Palette{}, err
 		}

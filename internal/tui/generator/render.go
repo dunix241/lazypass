@@ -77,7 +77,7 @@ func (s *View) drawLength(screen tcell.Screen, r rect, colors shared.Palette) {
 	railStart, railWidth := sliderRail(r)
 	lengthValue := s.cfg.Length
 	if parsed, err := strconv.Atoi(s.lengthText); err == nil {
-		lengthValue = parsed
+		lengthValue = max(generator.MinLength, min(generator.MaxLength, parsed))
 	}
 	knob := railStart + (lengthValue-generator.MinLength)*(railWidth-1)/(generator.MaxLength-generator.MinLength)
 	for i := 0; i < railWidth; i++ {

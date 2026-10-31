@@ -15,7 +15,7 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			s.store.HandleKey(event)
 			return
 		}
-		if s.route == VaultRoute && s.vault.IsFiltering() {
+		if s.route == VaultRoute && (s.vault.IsFiltering() || s.vault.IsConfirmingDelete()) {
 			s.vault.HandleKey(event)
 			return
 		}

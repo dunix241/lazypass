@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"lazypass/internal/debug"
 	"lazypass/internal/tui/shared"
@@ -12,6 +13,10 @@ import (
 )
 
 func (s *StoreForm) HandleKey(event *tcell.EventKey) {
+	if s.editingValue {
+		s.handleValueKey(event)
+		return
+	}
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.Close()
@@ -28,12 +33,27 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 	case tcell.KeyTAB:
 		s.insertStoreSuggestion()
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(s.storePath) > 0 {
-			runes := []rune(s.storePath)
-			s.storePath = string(runes[:len(runes)-1])
-			s.refreshStoreSuggestions()
-		}
+		s.storePath = shared.DeleteLastRune(s.storePath)
+		s.refreshStoreSuggestions()
 	case tcell.KeyEnter:
+		if s.manual {
+			if strings.HasSuffix(s.storePath, "/") {
+				s.createFolder()
+				return
+			}
+			path, err := vault.ParsePath(s.storePath)
+			if err != nil || len(path) == 0 {
+				s.notify(shared.Warning, "Enter a valid vault destination")
+				return
+			}
+			if err := s.deps.Service.CheckNewPath(context.Background(), path); err != nil {
+				s.notify(shared.Warning, storeErrorMessage(err))
+				return
+			}
+			s.editingValue = true
+			s.storeMessage = ""
+			return
+		}
 		s.store()
 	case tcell.KeyRune:
 		if event.Rune() >= ' ' {
@@ -44,16 +64,26 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 }
 
 func (s *StoreForm) store() {
-	path, err := vaultPath(s.storePath)
+	path, err := vault.ParsePath(s.storePath)
 	if err != nil || len(path) == 0 {
 		s.notify(shared.Warning, "Enter a valid vault destination")
 		return
 	}
 	password := ""
-	if s.deps.Password != nil {
+	if s.manual {
+		password = s.value
+	} else if s.deps.Password != nil {
 		password = s.deps.Password()
 	}
-	if err := s.deps.Service.Store(context.Background(), vault.Entry{Path: path, Password: password}); err != nil {
+	if err := s.deps.RunPrompted.Execute(func(ctx context.Context) error {
+		entry := vault.Entry{Path: path, Password: password}
+		if s.editEntry != nil {
+			entry = *s.editEntry
+			entry.Password = password
+			return s.deps.Service.Store(ctx, entry)
+		}
+		return s.deps.Service.Create(ctx, entry)
+	}); err != nil {
 		var diagnostic vault.Diagnostic
 		if !errors.As(err, &diagnostic) {
 			debug.Failure("vault store", vaultFailureCause(err))
@@ -61,6 +91,59 @@ func (s *StoreForm) store() {
 		s.notify(shared.Error, storeErrorMessage(err))
 		return
 	}
+	if s.deps.Saved != nil {
+		s.deps.Saved(path)
+	}
 	s.Close()
 	s.notify(shared.Success, "Stored in vault")
+}
+
+func (s *StoreForm) createFolder() {
+	path, err := vault.ParsePath(strings.TrimSuffix(s.storePath, "/"))
+	if err != nil || len(path) == 0 {
+		s.notify(shared.Warning, "Enter a valid folder destination")
+		return
+	}
+	if err := s.deps.Service.CreateFolder(context.Background(), path); err != nil {
+		s.notify(shared.Error, storeErrorMessage(err))
+		return
+	}
+	if s.deps.Saved != nil {
+		s.deps.Saved(path)
+	}
+	s.Close()
+	s.notify(shared.Success, "Folder created")
+}
+
+func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
+	switch event.Key() {
+	case tcell.KeyEscape:
+		s.Close()
+	case tcell.KeyBacktab:
+		if s.editEntry != nil {
+			return
+		}
+		s.value = ""
+		s.editingValue = false
+	case tcell.KeyCtrlU:
+		s.value = ""
+	case tcell.KeyCtrlW:
+		s.value = shared.DeletePreviousWord(s.value)
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		s.value = shared.DeleteLastRune(s.value)
+	case tcell.KeyEnter:
+		if s.value == "" {
+			s.notify(shared.Warning, "Enter a value")
+			return
+		}
+		s.store()
+	case tcell.KeyRune:
+		if event.Rune() >= ' ' {
+			if len(s.value)+len(string(event.Rune())) > 64*1024 {
+				s.notify(shared.Warning, "Value limit is 64 KiB")
+				return
+			}
+			s.value += string(event.Rune())
+		}
+	}
 }

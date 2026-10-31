@@ -7,6 +7,7 @@ import (
 )
 
 func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
+	defer s.drawDelete(screen, frame)
 	r, colors := frame.Card, frame.Palette
 	shared.DrawBox(screen, r, colors.Border, colors.Surface)
 	path := "/"
@@ -19,7 +20,7 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	if s.vaultFiltering {
-		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate("Filter: "+s.vaultFilter+"_", r.W-4), colors.Muted)
+		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate("Search: "+s.vaultFilter+"_", r.W-4), colors.Muted)
 	}
 	if s.vaultError != "" {
 		listY, _, _ := s.vaultListWindow(r)
@@ -49,6 +50,9 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	listY, limit, start := s.vaultListWindow(r)
 	for i := start; i < len(nodes) && i < start+limit; i++ {
 		node, prefix := nodes[i], "  "
+		if s.vaultFiltering {
+			node.Name = s.searchName(node)
+		}
 		if i == s.vaultSelected {
 			prefix = "> "
 		}

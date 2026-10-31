@@ -2,7 +2,6 @@ package shared
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -21,11 +20,14 @@ func Truncate(value string, width int) string {
 		return ""
 	}
 	var result strings.Builder
-	for _, r := range value {
-		if uniseg.StringWidth(result.String()+string(r)) > width-1 {
+	used := 0
+	graphemes := uniseg.NewGraphemes(value)
+	for graphemes.Next() {
+		if used+graphemes.Width() > width-1 {
 			break
 		}
-		result.WriteRune(r)
+		result.WriteString(graphemes.Str())
+		used += graphemes.Width()
 	}
 	return result.String() + "…"
 }
@@ -53,5 +55,5 @@ func DrawBox(screen tcell.Screen, r Rect, color, surface tcell.Color) {
 
 func PrintPanelFooter(screen tcell.Screen, r Rect, text string, color tcell.Color) {
 	text = Truncate(text, r.W-4)
-	PrintAt(screen, r.X+max(1, (r.W-utf8.RuneCountInString(text))/2), r.Y+r.H-2, text, color)
+	PrintAt(screen, r.X+max(1, (r.W-uniseg.StringWidth(text))/2), r.Y+r.H-2, text, color)
 }

@@ -41,7 +41,7 @@ func storeSuggestionQuery(destination string) (vault.Path, string, error) {
 	if parent == "" {
 		return nil, prefix, nil
 	}
-	path, err := vaultPath(parent)
+	path, err := vault.ParsePath(parent)
 	return path, prefix, err
 }
 func (s *StoreForm) insertStoreSuggestion() {
@@ -50,11 +50,4 @@ func (s *StoreForm) insertStoreSuggestion() {
 	}
 	s.storePath = s.storeNodes[s.storeSelected].Path.String() + "/"
 	s.refreshStoreSuggestions()
-}
-func vaultPath(text string) (vault.Path, error) {
-	path := vault.Path(strings.Split(text, "/"))
-	if err := path.Validate(); err != nil {
-		return nil, err
-	}
-	return path, nil
 }

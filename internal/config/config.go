@@ -11,6 +11,7 @@ import (
 	"lazypass/internal/debug"
 	"lazypass/internal/generator"
 	"lazypass/internal/theme"
+	"lazypass/internal/util"
 
 	"github.com/adrg/xdg"
 	"gopkg.in/yaml.v3"
@@ -139,10 +140,6 @@ func (c Config) Save(path string) error {
 		}
 		path = p
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		debug.Failure("config save directory", debug.IO)
-		return err
-	}
 	var data bytes.Buffer
 	encoder := yaml.NewEncoder(&data)
 	encoder.SetIndent(2)
@@ -154,13 +151,8 @@ func (c Config) Save(path string) error {
 		debug.Failure("config encode", debug.IO)
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data.Bytes(), 0o600); err != nil {
+	if err := util.WritePrivateFile(path, data.Bytes()); err != nil {
 		debug.Failure("config save file", debug.IO)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		debug.Failure("config save rename", debug.IO)
 		return err
 	}
 	return nil

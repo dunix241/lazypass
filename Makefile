@@ -16,10 +16,14 @@ tidy:
 	go mod tidy
 
 fmt:
-	gofmt -w cmd internal main.go
+	gofmt -w .
 
 fmt-check:
-	test -z "$$(gofmt -l cmd internal main.go)"
+	@files="$$(gofmt -l .)" || exit 1; \
+	if [ -n "$$files" ]; then \
+		printf 'Go formatting violations:\n%s\n\nRun make fmt to fix them.\n' "$$files"; \
+		exit 1; \
+	fi
 
 test:
 	go test -race ./...

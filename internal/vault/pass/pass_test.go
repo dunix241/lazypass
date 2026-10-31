@@ -26,6 +26,32 @@ type fakeCall struct {
 
 type fakeExitError struct{ code int }
 
+func TestNoninteractiveRunUsesCacheWithoutPrompt(t *testing.T) {
+	t.Setenv("PASSWORD_STORE_GPG_OPTS", "--trust-model always")
+	r := &fakeRunner{fn: func(_ context.Context, _ []string, _ string, env []string) ([]byte, error) {
+		found := false
+		for _, value := range env {
+			if value == "PASSWORD_STORE_GPG_OPTS=--trust-model always --batch --pinentry-mode error" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("noninteractive GPG options missing")
+		}
+		return []byte("gpg: public key decryption failed: No pinentry"), fakeExitError{2}
+	}}
+	p := New(t.TempDir(), r)
+	if _, err := p.run(vault.WithoutPrompt(context.Background()), []string{"show", "--", "entry"}, nil); !errors.Is(err, vault.ErrPromptRequired) {
+		t.Fatalf("got %v", err)
+	}
+	r.fn = func(_ context.Context, _ []string, _ string, _ []string) ([]byte, error) {
+		return []byte("cached-value"), nil
+	}
+	if output, err := p.run(vault.WithoutPrompt(context.Background()), []string{"show", "--", "entry"}, nil); err != nil || string(output) != "cached-value" {
+		t.Fatal("cached decrypt failed")
+	}
+}
+
 func (e fakeExitError) Error() string { return "exit status" }
 func (e fakeExitError) ExitCode() int { return e.code }
 

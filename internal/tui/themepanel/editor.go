@@ -20,10 +20,7 @@ func (s *Panel) handleThemeName(event *tcell.EventKey) {
 	case tcell.KeyCtrlW:
 		s.name, s.nameEdits = shared.DeletePreviousWord(s.name), true
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(s.name) > 0 {
-			runes := []rune(s.name)
-			s.name = string(runes[:len(runes)-1])
-		}
+		s.name = shared.DeleteLastRune(s.name)
 	case tcell.KeyEnter:
 		if err := theme.ValidateName(s.name); err != nil {
 			debug.Failure("theme name", debug.Invalid)
@@ -83,7 +80,7 @@ func (s *Panel) handleThemeEditor(event *tcell.EventKey) {
 		s.colorText, s.colorEdits = shared.DeletePreviousWord(s.colorText), true
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if len(s.colorText) > 0 {
-			s.colorText = s.colorText[:len(s.colorText)-1]
+			s.colorText = shared.DeleteLastRune(s.colorText)
 			s.colorEdits = true
 		}
 	case tcell.KeyEnter:

@@ -11,6 +11,7 @@ import (
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/tui/themepanel"
 	vaultui "lazypass/internal/tui/vault"
+	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 
 	"github.com/rivo/tview"
@@ -58,16 +59,24 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 		OpenThemes:  s.openThemePanel,
 	})
 	s.vault = vaultui.New(vaultui.Dependencies{
+		OpenEdit:    s.openVaultEdit,
+		OpenAdd:     s.openVaultAdd,
 		Service:     s.vaultService,
 		RunPrompted: s.runPrompted,
 		Notify:      s.notify,
 		OpenThemes:  s.openThemePanel,
 	})
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
-		Service:  s.vaultService,
-		Password: s.generator.Password,
-		Notify:   s.notify,
-		Closed:   func() { s.overlay = noOverlay },
+		Service:     s.vaultService,
+		Password:    s.generator.Password,
+		Notify:      s.notify,
+		Closed:      func() { s.overlay = noOverlay },
+		RunPrompted: s.runPrompted,
+		Saved: func(_ vault.Path) {
+			if s.route == VaultRoute {
+				s.vault.Refresh()
+			}
+		},
 	})
 	s.themePanel = themepanel.New(themepanel.Dependencies{
 		CurrentPalette:  func() shared.Palette { return s.colors },

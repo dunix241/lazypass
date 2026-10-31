@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 
+	"lazypass/internal/util"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -208,31 +210,11 @@ func Save(name string, palette Palette) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	data, err := yaml.Marshal(palette)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+name+"-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	return util.WritePrivateFile(path, data)
 }
 
 // Delete removes a custom theme without following symlinks.

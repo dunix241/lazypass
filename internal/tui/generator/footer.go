@@ -6,7 +6,7 @@ func (s *View) Footer(width int) string {
 	contextHint := ""
 	switch s.selected {
 	case focusLength:
-		contextHint = "<left>/<right> length"
+		contextHint = "←/→ length"
 	case focusUpper, focusLower, focusNumbers, focusSymbols, focusAmbiguous:
 		contextHint = "<space> toggle"
 	}

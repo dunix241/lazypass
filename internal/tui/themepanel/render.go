@@ -2,6 +2,7 @@ package themepanel
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"lazypass/internal/theme"
@@ -28,12 +29,14 @@ func (s *Panel) Draw(screen tcell.Screen, frame shared.Frame) {
 	case themeEditor:
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Edit "+s.names[s.selected], w-4), colors.Text)
 		rows := min(len(themeRoles), h-5)
-		for i := 0; i < rows; i++ {
+		start := max(0, s.role-rows+1)
+		for row := 0; row < rows; row++ {
+			i := start + row
 			value, color := *paletteRole(&s.pending, i), colors.Muted
 			if i == s.role {
 				value, color = "["+s.colorText+"]", colors.Focus
 			}
-			shared.PrintAt(screen, r.X+2, r.Y+3+i, shared.Truncate(fmt.Sprintf("%-8s %s", themeRoles[i], value), w-4), color)
+			shared.PrintAt(screen, r.X+2, r.Y+3+row, shared.Truncate(fmt.Sprintf("%-8s %s", themeRoles[i], value), w-4), color)
 		}
 		footer = themeHelp(w-4, "<enter> validate  s save", "s save")
 	case themeDeleteConfirm:
@@ -50,13 +53,7 @@ func (s *Panel) Draw(screen tcell.Screen, frame shared.Frame) {
 			listY, limit = r.Y+4, h-7
 		}
 		rows := min(len(matches), limit)
-		position := 0
-		for i, index := range matches {
-			if index == s.selected {
-				position = i
-				break
-			}
-		}
+		position := max(0, slices.Index(matches, s.selected))
 		start := max(0, position-rows+1)
 		for i := 0; i < rows; i++ {
 			index := matches[start+i]

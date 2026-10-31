@@ -142,7 +142,7 @@ func TestConfigSaveFailureLogsOperation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `operation="config save directory" cause="io"`) {
+	if !strings.Contains(string(data), `operation="config save file" cause="io"`) {
 		t.Fatalf("save failure not logged: %q", data)
 	}
 }

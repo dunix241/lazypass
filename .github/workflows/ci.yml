@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: "1.27.1"
-      - run: make fmt-check
+      - name: Check Go formatting
+        run: make fmt-check
       - run: go vet ./...
       - run: go test -race ./...

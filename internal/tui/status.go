@@ -2,11 +2,11 @@ package tui
 
 import (
 	"time"
-	"unicode/utf8"
 
 	"lazypass/internal/tui/shared"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/uniseg"
 )
 
 type notificationLevel = shared.Level
@@ -24,7 +24,7 @@ func (s *screen) notify(level notificationLevel, message string) {
 
 func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, width int) {
 	if s.status != "" && time.Now().Before(s.statusTill) {
-		statusX := x + width - utf8.RuneCountInString(s.status) - 2
+		statusX := x + width - uniseg.StringWidth(s.status) - 2
 		if statusX > x+logo.right()+2 {
 			shared.PrintAt(screen, statusX, y, s.status, s.notificationColor(s.statusLevel))
 		} else {

@@ -176,7 +176,12 @@ func (p *Provider) Delete(ctx context.Context, path vault.Path) error {
 		logPathFailure("pass remove", err)
 		return err
 	}
-	_, err := p.run(ctx, append([]string{"rm", "--force", "--"}, path.String()), nil)
+	cleanup, err := p.keepDeleteParent(path)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	_, err = p.run(ctx, append([]string{"rm", "--force", "--"}, path.String()), nil)
 	return err
 }
 
@@ -197,7 +202,13 @@ func (p *Provider) run(parent context.Context, args []string, stdin io.Reader) (
 	}
 	ctx, cancel := context.WithTimeout(parent, commandTimeout)
 	defer cancel()
-	output, err := p.Runner.Run(ctx, "pass", args, stdin, []string{"PASSWORD_STORE_DIR=" + p.storeDir()})
+	env := []string{"PASSWORD_STORE_DIR=" + p.storeDir()}
+	if vault.IsNoninteractive(parent) {
+		// pinentry-mode=error permits agent-cache use, but never starts a prompt
+		// under the active TUI. Preserve any configured GPG options.
+		env = append(env, "PASSWORD_STORE_GPG_OPTS="+os.Getenv("PASSWORD_STORE_GPG_OPTS")+" --batch --pinentry-mode error")
+	}
+	output, err := p.Runner.Run(ctx, "pass", args, stdin, env)
 	if err == nil {
 		return output, nil
 	}
@@ -206,6 +217,9 @@ func (p *Provider) run(parent context.Context, args []string, stdin io.Reader) (
 		return nil, vault.ErrUnavailable
 	}
 	message := strings.ToLower(err.Error() + " " + string(output))
+	if vault.IsNoninteractive(parent) && (strings.Contains(message, "no pinentry") || strings.Contains(message, "inappropriate ioctl") || strings.Contains(message, "batchmode") || strings.Contains(message, "batch mode") || strings.Contains(message, "can't get input")) {
+		return nil, vault.ErrPromptRequired
+	}
 	exitCode := processExitCode(err)
 	var classified error
 	cause := debug.Unknown

@@ -2,6 +2,7 @@ package themepanel
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"lazypass/internal/debug"
@@ -54,7 +55,7 @@ func (s *Panel) handleThemePicker(event *tcell.EventKey) {
 		s.moveThemeSelection(1)
 	case 'k':
 		s.moveThemeSelection(-1)
-	case 'n':
+	case 'a':
 		s.mode, s.name, s.nameEdits, s.error = themeName, "", false, ""
 	case 'e':
 		if len(s.names) == 0 {
@@ -90,10 +91,8 @@ func (s *Panel) updateThemeFilter(query string) {
 	if len(matches) == 0 {
 		return
 	}
-	for _, i := range matches {
-		if i == s.selected {
-			return
-		}
+	if slices.Contains(matches, s.selected) {
+		return
 	}
 	s.selected = matches[0]
 	if s.previewTheme(s.names[s.selected]) {
@@ -111,10 +110,7 @@ func (s *Panel) handleThemeFilter(event *tcell.EventKey) {
 	case tcell.KeyEnter:
 		s.applyThemeSelection()
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if s.query != "" {
-			runes := []rune(s.query)
-			s.updateThemeFilter(string(runes[:len(runes)-1]))
-		}
+		s.updateThemeFilter(shared.DeleteLastRune(s.query))
 	case tcell.KeyCtrlU:
 		s.updateThemeFilter("")
 	case tcell.KeyCtrlW:
@@ -141,13 +137,7 @@ func (s *Panel) moveThemeSelection(delta int) {
 	if len(matches) == 0 {
 		return
 	}
-	position := 0
-	for i, index := range matches {
-		if index == s.selected {
-			position = i
-			break
-		}
-	}
+	position := max(0, slices.Index(matches, s.selected))
 	s.selected = matches[(position+delta+len(matches))%len(matches)]
 	if s.previewTheme(s.names[s.selected]) {
 		s.previewed = true

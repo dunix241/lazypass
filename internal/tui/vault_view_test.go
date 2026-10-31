@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestVaultCopyReleasesTerminalForPrompts(t *testing.T) {
+func TestVaultCopyDoesNotSuspendWithoutPrompt(t *testing.T) {
 	for _, mode := range []string{"suspend", "refused", "none"} {
 		t.Run(mode, func(t *testing.T) {
 			p := &memoryVault{nodes: map[string][]vault.Node{"": {{Name: "mail", Path: vault.Path{"mail"}, Kind: vault.EntryNode}}}, read: map[string]vault.Entry{"mail": {Password: "secret"}}}
@@ -31,7 +31,7 @@ func TestVaultCopyReleasesTerminalForPrompts(t *testing.T) {
 				a.screen.suspend = nil
 			}
 			a.screen.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
-			if copied != "secret" || calls != 1 || a.screen.status != "Copied to clipboard" || suspended != (mode == "suspend") {
+			if copied != "secret" || calls != 1 || a.screen.status != "Copied to clipboard" || suspended {
 				t.Fatalf("copy=%q calls=%d suspended=%t", copied, calls, suspended)
 			}
 		})

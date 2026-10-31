@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"sort"
-	"strings"
 
 	"lazypass/internal/app"
 	"lazypass/internal/build"
@@ -300,7 +299,7 @@ func runVaultList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	path, err := vaultPath(optionalArg(args))
+	path, err := vault.ParsePath(optionalArg(args))
 	if err != nil {
 		return usage(err)
 	}
@@ -325,7 +324,7 @@ func runVaultShow(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	path, err := vaultPath(args[0])
+	path, err := vault.ParsePath(args[0])
 	if err != nil {
 		return usage(err)
 	}
@@ -369,7 +368,7 @@ func runVaultStore(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	path, err := vaultPath(args[0])
+	path, err := vault.ParsePath(args[0])
 	if err != nil {
 		return usage(err)
 	}
@@ -401,7 +400,7 @@ func runVaultCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	path, err := vaultPath(args[0])
+	path, err := vault.ParsePath(args[0])
 	if err != nil {
 		return usage(err)
 	}
@@ -455,17 +454,6 @@ func configuredVault(cfg config.Config) (*passprovider.Provider, bool) {
 		return nil, false
 	}
 	return passprovider.New(cfg.Vault.StoreDir, nil), true
-}
-
-func vaultPath(text string) (vault.Path, error) {
-	if text == "" {
-		return nil, nil
-	}
-	path := vault.Path(strings.Split(text, "/"))
-	if err := path.Validate(); err != nil {
-		return nil, err
-	}
-	return path, nil
 }
 
 func optionalArg(args []string) string {

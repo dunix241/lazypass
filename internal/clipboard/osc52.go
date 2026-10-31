@@ -18,12 +18,7 @@ var (
 	terminalMu             sync.Mutex
 )
 
-// writeOSC52 confirms dispatch, not receipt: OSC 52 has no write acknowledgement.
-// Keep bytes intact, including NUL; Base64 safely transports control characters.
-func writeOSC52(w io.Writer, text string) error {
-	return writeTerminalSequence(w, text, false)
-}
-
+// Successful dispatch does not imply receipt: OSC 52 has no acknowledgement.
 func writeTerminalSequence(w io.Writer, text string, tmux bool) error {
 	if len(text) > maxTerminalBytes {
 		return errTerminalLimit

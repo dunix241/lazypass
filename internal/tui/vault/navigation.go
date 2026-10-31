@@ -21,6 +21,12 @@ func (s *View) Refresh() {
 		nodes = nil
 	}
 	s.vaultNodes = nodes
+	if s.vaultFiltering {
+		s.loadSearchNodes()
+	} else {
+		s.searchNodes = nil
+		s.searchLoaded = false
+	}
 	s.vaultSelected = min(s.vaultSelected, max(0, len(s.vaultDisplayNodes())-1))
 }
 func (s *View) moveVaultSelection(delta int) {
@@ -63,11 +69,7 @@ func (s *View) copyVaultEntry() {
 	if !ok || node.Kind != vault.EntryNode {
 		return
 	}
-	run := s.deps.RunPrompted
-	if run == nil {
-		run = func(fn func() error) error { return fn() }
-	}
-	if err := run(func() error { return s.vault.CopyPassword(context.Background(), node.Path) }); err != nil {
+	if err := s.deps.RunPrompted.Execute(func(ctx context.Context) error { return s.vault.CopyPassword(ctx, node.Path) }); err != nil {
 		var diagnostic vault.Diagnostic
 		if !errors.As(err, &diagnostic) {
 			debug.Failure("vault copy", vaultFailureCause(err))

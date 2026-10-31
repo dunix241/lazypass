@@ -1,6 +1,14 @@
 package shared
 
-import "unicode"
+import (
+	"unicode"
+	"unicode/utf8"
+)
+
+func DeleteLastRune(value string) string {
+	_, size := utf8.DecodeLastRuneInString(value)
+	return value[:len(value)-size]
+}
 
 func DeletePreviousWord(value string) string {
 	runes := []rune(value)

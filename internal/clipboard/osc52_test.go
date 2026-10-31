@@ -14,7 +14,7 @@ import (
 func TestOSC52PreservesBytesAndFramesClipboardSelection(t *testing.T) {
 	for _, text := range []string{"public-marker", "世界\n\x00\x1b", strings.Repeat("x", maxTerminalBytes)} {
 		var output bytes.Buffer
-		if err := writeOSC52(&output, text); err != nil {
+		if err := writeTerminalSequence(&output, text, false); err != nil {
 			t.Fatal(err)
 		}
 		sequence := output.String()
@@ -39,12 +39,12 @@ func (w failingWriter) Write(p []byte) (int, error) {
 
 func TestOSC52WriteFailuresAreSafe(t *testing.T) {
 	for _, writer := range []io.Writer{failingWriter{}, failingWriter{short: true}} {
-		if err := writeOSC52(writer, "secret-value"); err != errTerminalWrite {
+		if err := writeTerminalSequence(writer, "secret-value", false); err != errTerminalWrite {
 			t.Fatal("unsafe write error")
 		}
 	}
 	var output bytes.Buffer
-	if err := writeOSC52(&output, strings.Repeat("x", maxTerminalBytes+1)); err != errTerminalLimit || output.Len() != 0 {
+	if err := writeTerminalSequence(&output, strings.Repeat("x", maxTerminalBytes+1), false); err != errTerminalLimit || output.Len() != 0 {
 		t.Fatal("oversized payload dispatched")
 	}
 }

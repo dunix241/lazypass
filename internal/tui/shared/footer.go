@@ -1,6 +1,6 @@
 package shared
 
-import "unicode/utf8"
+import "github.com/rivo/uniseg"
 
 func FitFooter(width int, options ...string) string {
 	return FitHints(width-2, options...)
@@ -8,12 +8,12 @@ func FitFooter(width int, options ...string) string {
 
 func FitHints(width int, options ...string) string {
 	for _, option := range options {
-		if utf8.RuneCountInString(option) <= width {
+		if uniseg.StringWidth(option) <= width {
 			return option
 		}
 	}
 	if len(options) == 0 {
 		return ""
 	}
-	return options[len(options)-1]
+	return Truncate(options[len(options)-1], width)
 }

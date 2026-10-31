@@ -10,6 +10,28 @@ import (
 	"unicode/utf8"
 )
 
+func TestCompactEditorKeepsSelectedRoleVisible(t *testing.T) {
+	p, h := newPanel()
+	p.mode = themeEditor
+	p.names = []string{"fixture"}
+	p.role = len(themeRoles) - 1
+	p.colorText = "#123456"
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	defer sim.Fini()
+	sim.SetSize(40, 12)
+	p.Draw(sim, shared.Frame{Viewport: shared.Rect{W: 40, H: 12}, Palette: h.colors})
+	var text strings.Builder
+	for y := 0; y < 12; y++ {
+		text.WriteString(rowText(sim, 0, y, 40))
+	}
+	if !strings.Contains(text.String(), "warning  [#123456]") {
+		t.Fatal("selected role hidden below compact editor")
+	}
+}
+
 type host struct {
 	colors    shared.Palette
 	name      string
@@ -49,7 +71,7 @@ func TestThemePickerVimNavigation(t *testing.T) {
 	if p.selected != start {
 		t.Fatal("k did not return to original")
 	}
-	for _, r := range "njk" {
+	for _, r := range "ajk" {
 		key(p, tcell.KeyRune, r)
 	}
 	if p.name != "jk" {
@@ -79,7 +101,7 @@ func TestThemePickerSlashFilterAndEscape(t *testing.T) {
 	if p.filtering || p.query != "" || !p.IsOpen() || len(p.matchingThemes()) != len(p.names) {
 		t.Fatal("Escape did not leave filter")
 	}
-	key(p, tcell.KeyRune, 'n')
+	key(p, tcell.KeyRune, 'a')
 	if p.mode != themeName {
 		t.Fatal("shortcuts did not resume")
 	}
@@ -138,7 +160,7 @@ func TestThemePickerQClosesAndRestoresPreview(t *testing.T) {
 	}
 	p, _ := newPanel()
 	p.Open()
-	for _, r := range "nq" {
+	for _, r := range "aq" {
 		key(p, tcell.KeyRune, r)
 	}
 	if !p.IsOpen() || p.name != "q" {
@@ -165,7 +187,7 @@ func TestThemeEditorCreatesEditsAndDeletesCustomTheme(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p, _ := newPanel()
 	p.Open()
-	for _, r := range "nmy-theme" {
+	for _, r := range "amy-theme" {
 		key(p, tcell.KeyRune, r)
 	}
 	key(p, tcell.KeyEnter, 0)
@@ -239,7 +261,7 @@ func TestThemePanelRendersInsideWideAndCompactViewports(t *testing.T) {
 		if !strings.Contains(cells.String(), "Theme") || !strings.Contains(cells.String(), "/ filter") || strings.Contains(cells.String(), "<esc> close") {
 			t.Fatal("picker hints missing")
 		}
-		if size[0] >= 50 && !strings.Contains(cells.String(), "n new  e edit  d delete  / filter") {
+		if size[0] >= 50 && !strings.Contains(cells.String(), "a add  e edit  d delete  / filter") {
 			t.Fatal("full picker actions missing")
 		}
 	}

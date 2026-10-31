@@ -66,13 +66,15 @@ func Generate(opts generator.Options, count int) ([]Result, error) {
 		return nil, err
 	}
 	results := make([]Result, 0, count)
+	bits := opts.EntropyBits()
+	strength := generator.StrengthLabel(bits)
 	for range count {
 		password, err := opts.Generate()
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, Result{
-			Password: password, Length: opts.Length, EntropyBits: opts.EntropyBits(), Strength: generator.StrengthLabel(opts.EntropyBits()),
+			Password: password, Length: opts.Length, EntropyBits: bits, Strength: strength,
 		})
 	}
 	return results, nil
