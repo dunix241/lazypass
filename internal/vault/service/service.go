@@ -78,10 +78,7 @@ func (s Service) Create(ctx context.Context, entry vault.Entry) error {
 	if creator, ok := p.(vault.EntryCreator); ok {
 		return creator.Create(ctx, entry)
 	}
-	if err := s.CheckNewPath(ctx, entry.Path); err != nil {
-		return err
-	}
-	return s.Store(ctx, entry)
+	return vault.ErrUnsupported
 }
 
 func (s Service) CreateFolder(ctx context.Context, path vault.Path) error {

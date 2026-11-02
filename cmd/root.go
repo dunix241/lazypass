@@ -15,11 +15,12 @@ import (
 	"lazypass/internal/clipboard"
 	"lazypass/internal/config"
 	"lazypass/internal/debug"
+	"lazypass/internal/state"
 	"lazypass/internal/theme"
 	"lazypass/internal/tui"
 	"lazypass/internal/util"
 	"lazypass/internal/vault"
-	passprovider "lazypass/internal/vault/pass"
+	"lazypass/internal/vault/providers"
 	"lazypass/internal/vault/service"
 
 	"github.com/spf13/cobra"
@@ -57,6 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "print lazypass version")
 	rootCmd.PersistentFlags().String("config", "", "config file (default: XDG path)")
 	rootCmd.PersistentFlags().Bool("copy", false, "copy the first generated password")
+	rootCmd.PersistentFlags().String("vault", "", "select a configured vault by name")
 	rootCmd.PersistentFlags().Bool("no-tui", false, "generate instead of starting the TUI")
 	rootCmd.PersistentFlags().Bool("stdout", false, "legacy alias for --no-tui")
 
@@ -79,6 +81,13 @@ func init() {
 	)
 	version := &cobra.Command{Use: "version", Short: "Print lazypass version", Run: func(cmd *cobra.Command, _ []string) { fmt.Fprintln(cmd.OutOrStdout(), build.Version) }}
 	vaultCommand := &cobra.Command{Use: "vault", Short: "Manage an encrypted password vault", RunE: runVaultTUI}
+	initVault := &cobra.Command{Use: "init", Short: "Initialize an encrypted vault", Args: cobra.NoArgs, RunE: runVaultInit}
+	initVault.Flags().String("provider", "age", "vault provider")
+	initVault.Flags().String("name", "", "name for the new vault (defaults to provider)")
+	initVault.Flags().String("store-dir", "", "age store directory")
+	initVault.Flags().String("identity-file", "", "encrypted age identity file outside the store")
+	initVault.Flags().String("recipient", "", "GPG recipient for pass, or existing X25519 public recipient for age")
+	vaultCommand.AddCommand(initVault)
 	vaultCommand.AddCommand(
 		&cobra.Command{Use: "status", Short: "Show vault provider setup status", Args: cobra.NoArgs, RunE: runVaultStatus},
 		&cobra.Command{Use: "list [path]", Short: "List vault folders and entries", Args: cobra.MaximumNArgs(1), RunE: runVaultList},
@@ -136,8 +145,29 @@ func runTUIRoute(cmd *cobra.Command, route tui.Route) error {
 	if err != nil {
 		return usage(err)
 	}
-	vaultService, _ := configuredVaultService(cfg)
-	ui := tui.NewApp(cfg.WithOptions(opts), path, clipboard.Copy, tui.WithVault(vaultService), tui.WithInitialRoute(route))
+	var vaults []tui.NamedVault
+	selected := mustString(cmd, "vault")
+	if selected != "" {
+		cfg.LastVault = selected
+	}
+	for _, entry := range cfg.Vaults {
+		p, err := openProvider(entry)
+		if err != nil {
+			return err
+		}
+		item := tui.NamedVault{Name: entry.Name, Service: service.Service{Provider: p, Copy: clipboard.Copy}}
+		if entry.Name == selected {
+			vaults = append([]tui.NamedVault{item}, vaults...)
+		} else {
+			vaults = append(vaults, item)
+		}
+	}
+	if selected != "" {
+		if _, ok := cfg.Vaults.Select(selected); !ok {
+			return usage(fmt.Errorf("vault not found"))
+		}
+	}
+	ui := tui.NewApp(cfg.WithOptions(opts), path, clipboard.Copy, tui.WithVaults(vaults), tui.WithInitialRoute(route))
 	if err := ui.Init(); err != nil {
 		return err
 	}
@@ -277,7 +307,11 @@ func runVaultStatus(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	p, ok := configuredVault(cfg)
+	entry, exists := cfg.SelectedVault(mustString(cmd, "vault"))
+	if !exists && mustString(cmd, "vault") != "" {
+		return usage(fmt.Errorf("vault not found"))
+	}
+	p, ok := providerFor(entry)
 	if !ok {
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "provider: unavailable")
 		return err
@@ -290,7 +324,7 @@ func runVaultStatus(cmd *cobra.Command, _ []string) error {
 			status = "unavailable"
 		}
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "provider: pass\nstoreDir: %s\nstatus: %s\n", p.StoreDirectory(), status)
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "provider: %s\nstoreDir: %s\nstatus: %s\n", p.Name(), p.StoreDirectory(), status)
 	return err
 }
 
@@ -429,7 +463,15 @@ func vaultService(cmd *cobra.Command) (service.Service, error) {
 	if err != nil {
 		return service.Service{}, err
 	}
-	return vaultServiceForConfig(cfg)
+	entry, ok := cfg.SelectedVault(mustString(cmd, "vault"))
+	if !ok {
+		return service.Service{}, vault.ErrUnavailable
+	}
+	p, ok := providerFor(entry)
+	if !ok {
+		return service.Service{}, vault.ErrUnavailable
+	}
+	return service.Service{Provider: p, Copy: clipboard.Copy}, nil
 }
 
 func vaultServiceForConfig(cfg config.Config) (service.Service, error) {
@@ -449,11 +491,21 @@ func configuredVaultService(cfg config.Config) (service.Service, bool) {
 	return service.Service{Provider: p, Copy: clipboard.Copy}, true
 }
 
-func configuredVault(cfg config.Config) (*passprovider.Provider, bool) {
-	if cfg.Vault.Provider != "pass" {
+func configuredVault(cfg config.Config) (providers.Managed, bool) {
+	entry, ok := cfg.SelectedVault("")
+	if !ok {
 		return nil, false
 	}
-	return passprovider.New(cfg.Vault.StoreDir, nil), true
+	return providerFor(entry)
+}
+
+func providerFor(entry config.Vault) (providers.Managed, bool) {
+	p, err := openProvider(entry)
+	return p, err == nil
+}
+
+func openProvider(entry config.Vault) (providers.Managed, error) {
+	return providers.Builtins().Open(entry, func() (string, error) { return terminalPassphrase("Age identity passphrase: ") })
 }
 
 func optionalArg(args []string) string {
@@ -469,7 +521,16 @@ func loadResolved(cmd *cobra.Command) (config.Config, string, error) {
 		return config.Config{}, "", err
 	}
 	cfg, err := config.Load(path)
-	return cfg, path, err
+	if err != nil {
+		return cfg, path, err
+	}
+	selected, stateErr := state.ResolveVault(path, cfg.LastVault)
+	if stateErr != nil {
+		debug.Failure("session state load", debug.IO)
+	} else {
+		cfg.LastVault = selected
+	}
+	return cfg, path, nil
 }
 
 func overrides(cmd *cobra.Command) app.Overrides {

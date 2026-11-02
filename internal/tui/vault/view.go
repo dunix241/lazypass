@@ -8,12 +8,14 @@ import (
 )
 
 type Dependencies struct {
+	Name        string
 	Service     service.Service
 	RunPrompted PromptRunner
 	Notify      func(shared.Level, string)
 	OpenThemes  func()
 	OpenAdd     func()
 	OpenEdit    func(vault.Path)
+	OpenPicker  func()
 	Dispatch    func(context.Context, func())
 }
 
@@ -40,6 +42,7 @@ func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }
 
 func New(deps Dependencies) *View { return &View{vault: deps.Service, deps: deps} }
 func (s *View) IsFiltering() bool { return s.vaultFiltering }
+
 func (s *View) notify(level shared.Level, message string) {
 	if s.deps.Notify != nil {
 		s.deps.Notify(level, message)

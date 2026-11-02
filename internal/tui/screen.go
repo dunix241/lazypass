@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"time"
 
 	"lazypass/internal/config"
@@ -22,26 +23,32 @@ const (
 	noOverlay overlay = iota
 	themeOverlay
 	storeOverlay
+	vaultPickerOverlay
 )
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
 	*tview.Box
-	cfg          config.Config
-	cfgPath      string
-	generator    *generatorui.View
-	vault        *vaultui.View
-	store        *vaultui.StoreForm
-	themePanel   *themepanel.Panel
-	route        Route
-	overlay      overlay
-	vaultService service.Service
-	colors       shared.Palette
-	status       string
-	statusTill   time.Time
-	statusLevel  shared.Level
-	quit         func()
-	suspend      func(func()) bool
+	cfg                 config.Config
+	cfgPath             string
+	generator           *generatorui.View
+	vault               *vaultui.View
+	store               *vaultui.StoreForm
+	themePanel          *themepanel.Panel
+	route               Route
+	overlay             overlay
+	vaultService        service.Service
+	colors              shared.Palette
+	status              string
+	statusTill          time.Time
+	statusLevel         shared.Level
+	quit                func()
+	suspend             func(func()) bool
+	vaults              []NamedVault
+	vaultViews          []*vaultui.View
+	vaultIndex          int
+	vaultPickerSelected int
+	dispatch            func(context.Context, func())
 }
 
 func (s *screen) Draw(screen tcell.Screen) {
@@ -75,6 +82,8 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.themePanel.Draw(screen, frame)
 	case storeOverlay:
 		s.store.Draw(screen, frame)
+	case vaultPickerOverlay:
+		s.drawVaultPicker(screen, frame)
 	}
 }
 

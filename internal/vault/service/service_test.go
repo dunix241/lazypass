@@ -9,6 +9,13 @@ import (
 	"lazypass/internal/vault"
 )
 
+func TestCreateRequiresProviderCreateContract(t *testing.T) {
+	s := Service{Provider: copyProvider{}}
+	if err := s.Create(context.Background(), vault.Entry{Path: vault.Path{"entry"}, Password: "fixture"}); !errors.Is(err, vault.ErrUnsupported) {
+		t.Fatalf("unsafe write fallback: %v", err)
+	}
+}
+
 type copyProvider struct{}
 
 func (copyProvider) Name() string                     { return "test" }

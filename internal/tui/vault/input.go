@@ -25,6 +25,10 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		s.openVaultNode()
 	case tcell.KeyRune:
 		switch event.Rune() {
+		case 'p':
+			if s.deps.OpenPicker != nil {
+				s.deps.OpenPicker()
+			}
 		case 'e':
 			node, ok := s.selectedVaultNode()
 			if ok && node.Kind == vault.EntryNode && s.deps.OpenEdit != nil {

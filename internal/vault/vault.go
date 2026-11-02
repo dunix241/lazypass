@@ -119,6 +119,9 @@ type EntryCreator interface {
 	Create(context.Context, Entry) error
 }
 
+// Locker drops any session-held decryption identities.
+type Locker interface{ Lock() }
+
 type FolderDeleter interface {
 	DeleteFolder(context.Context, Path) error
 }

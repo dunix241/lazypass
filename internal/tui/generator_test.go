@@ -4,6 +4,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"lazypass/internal/config"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestTUIOptionChangesPersist(t *testing.T) {
 func TestSavePreservesLatestNonGeneratorConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	current := config.Defaults()
-	current.Vault = config.Vault{Provider: "pass", StoreDir: "/vault"}
+	current.Vaults = config.Vaults{{Name: "pass", Provider: "pass", StoreDir: "/vault"}}
 	current.NerdFont = false
 	current.Theme = "nord"
 	if err := current.Save(path); err != nil {
@@ -44,7 +45,7 @@ func TestSavePreservesLatestNonGeneratorConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Length != 32 || loaded.Vault != current.Vault || loaded.NerdFont != current.NerdFont || loaded.Theme != current.Theme {
+	if loaded.Length != 32 || !reflect.DeepEqual(loaded.Vaults, current.Vaults) || loaded.NerdFont != current.NerdFont || loaded.Theme != current.Theme {
 		t.Fatalf("saved config: %#v", loaded)
 	}
 }

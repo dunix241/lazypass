@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"lazypass/internal/debug"
 	"lazypass/internal/generator"
@@ -29,13 +30,99 @@ type Config struct {
 	ExcludeAmbiguous bool   `yaml:"excludeAmbiguous"`
 	Theme            string `yaml:"theme"`
 	NerdFont         bool   `yaml:"nerdFont"`
-	Vault            Vault  `yaml:"vault"`
+	Vaults           Vaults `yaml:"vaults"`
+	LastVault        string `yaml:"-"` // Legacy read-only migration value.
+}
+
+func (c *Config) UnmarshalYAML(node *yaml.Node) error {
+	type plain Config
+	decoded := plain(*c)
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*c = Config(decoded)
+	var legacyVault *yaml.Node
+	hasVaults := false
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		switch node.Content[i].Value {
+		case "lastVault":
+			if err := node.Content[i+1].Decode(&c.LastVault); err != nil {
+				return err
+			}
+		case "vaults":
+			hasVaults = true
+		case "vault":
+			legacyVault = node.Content[i+1]
+		}
+	}
+	if !hasVaults && legacyVault != nil {
+		return legacyVault.Decode(&c.Vaults)
+	}
+	return nil
 }
 
 // Vault selects an optional password vault backend.
 type Vault struct {
-	Provider string `yaml:"provider"`
-	StoreDir string `yaml:"storeDir"`
+	Name         string `yaml:"name"`
+	Provider     string `yaml:"provider"`
+	StoreDir     string `yaml:"storeDir"`
+	IdentityFile string `yaml:"identityFile,omitempty"`
+}
+
+type Vaults []Vault
+
+func ValidateVaultName(name string) error {
+	if name == "" || strings.Trim(name, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		return fmt.Errorf("vault names must use lowercase letters, numbers, and hyphens")
+	}
+	return nil
+}
+
+func (v *Vaults) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.MappingNode {
+		var legacy Vault
+		if err := node.Decode(&legacy); err != nil {
+			return err
+		}
+		if legacy.Provider != "" {
+			if legacy.Name == "" {
+				legacy.Name = legacy.Provider
+			}
+			*v = Vaults{legacy}
+		}
+		return nil
+	}
+	type plain Vaults
+	var decoded plain
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*v = Vaults(decoded)
+	if len(*v) == 0 {
+		*v = nil
+	}
+	return nil
+}
+
+func (v Vaults) Select(name string) (Vault, bool) {
+	for _, entry := range v {
+		if name == "" || entry.Name == name {
+			return entry, true
+		}
+	}
+	return Vault{}, false
+}
+
+func (c Config) SelectedVault(name string) (Vault, bool) {
+	if name != "" {
+		return c.Vaults.Select(name)
+	}
+	if c.LastVault != "" {
+		if entry, ok := c.Vaults.Select(c.LastVault); ok {
+			return entry, true
+		}
+	}
+	return c.Vaults.Select("")
 }
 
 // Defaults for the first run: length 20, upper+lower+numbers.
@@ -123,6 +210,17 @@ func Load(path string) (Config, error) {
 	}
 	if c.Theme == "" {
 		c.Theme = theme.DefaultName()
+	}
+	seen := map[string]bool{}
+	for i := range c.Vaults {
+		entry := &c.Vaults[i]
+		if entry.Name == "" {
+			entry.Name = entry.Provider
+		}
+		if ValidateVaultName(entry.Name) != nil || seen[entry.Name] {
+			return Defaults(), fmt.Errorf("invalid config: vault names must be nonempty and unique")
+		}
+		seen[entry.Name] = true
 	}
 	if err := c.ToOptions().Validate(); err != nil {
 		debug.Failure("config validate", debug.Invalid)

@@ -30,7 +30,14 @@ func (m *memoryVault) List(_ context.Context, p vault.Path) ([]vault.Node, error
 func (m *memoryVault) Read(_ context.Context, p vault.Path) (vault.Entry, error) {
 	return m.read[p.String()], m.err
 }
-func (m *memoryVault) Write(_ context.Context, e vault.Entry) error   { m.store = e; return m.err }
+func (m *memoryVault) Write(_ context.Context, e vault.Entry) error { m.store = e; return m.err }
+
+func (m *memoryVault) Create(ctx context.Context, entry vault.Entry) error {
+	if err := (service.Service{Provider: m}).CheckNewPath(ctx, entry.Path); err != nil {
+		return err
+	}
+	return m.Write(ctx, entry)
+}
 func (m *memoryVault) Delete(context.Context, vault.Path) error       { return nil }
 func (m *memoryVault) Sync(context.Context) (vault.SyncResult, error) { return vault.SyncResult{}, nil }
 

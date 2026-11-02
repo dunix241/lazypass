@@ -7,6 +7,10 @@ import (
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return s.WrapInputHandler(func(event *tcell.EventKey, _ func(tview.Primitive)) {
+		if s.overlay == vaultPickerOverlay {
+			s.handleVaultPicker(event)
+			return
+		}
 		if s.overlay == themeOverlay {
 			s.themePanel.HandleKey(event)
 			return

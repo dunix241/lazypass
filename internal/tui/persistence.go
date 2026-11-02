@@ -3,10 +3,20 @@ package tui
 import (
 	"lazypass/internal/config"
 	"lazypass/internal/generator"
+	"lazypass/internal/state"
 	"lazypass/internal/theme"
 )
 
-func (s *screen) save() { _ = s.saveOptions(s.generator.Options()) }
+func (s *screen) save() {
+	_ = s.saveVaultSelection()
+	_ = s.saveOptions(s.generator.Options())
+}
+
+func (s *screen) saveVaultSelection() error {
+	name := s.vaults[s.vaultIndex].Name
+	s.cfg.LastVault = name
+	return state.SaveVault(s.cfgPath, name)
+}
 
 func (s *screen) saveOptions(options generator.Options) error {
 	if s.cfgPath == "" {
@@ -38,6 +48,7 @@ func (s *screen) updateConfig(update func(config.Config) config.Config) error {
 	if err := current.Save(s.cfgPath); err != nil {
 		return err
 	}
+	current.LastVault = s.cfg.LastVault
 	s.cfg = current
 	return nil
 }

@@ -19,12 +19,13 @@ func (s *StoreForm) refreshStoreSuggestions() {
 	if err != nil {
 		if !errors.Is(err, vault.ErrNotFound) {
 			debug.Failure("vault suggestions", vaultFailureCause(err))
-			s.storeMessage = "Folders cannot be loaded. Type a destination instead."
+			s.storeMessage = "Items cannot be loaded. Type a destination instead."
 		}
 		return
 	}
+	needle := strings.ToLower(prefix)
 	for _, node := range nodes {
-		if node.Kind == vault.FolderNode && strings.HasPrefix(strings.ToLower(node.Name), strings.ToLower(prefix)) {
+		if strings.HasPrefix(strings.ToLower(node.Name), needle) {
 			s.storeNodes = append(s.storeNodes, node)
 		}
 	}
@@ -45,9 +46,22 @@ func storeSuggestionQuery(destination string) (vault.Path, string, error) {
 	return path, prefix, err
 }
 func (s *StoreForm) insertStoreSuggestion() {
-	if len(s.storeNodes) == 0 {
+	if s.storeSelected < 0 || s.storeSelected >= len(s.storeNodes) {
 		return
 	}
-	s.storePath = s.storeNodes[s.storeSelected].Path.String() + "/"
+	node := s.storeNodes[s.storeSelected]
+	if node.Kind != vault.FolderNode {
+		return
+	}
+	s.storePath = node.Path.String() + "/"
 	s.refreshStoreSuggestions()
+}
+
+func (s *StoreForm) suggestionWindow(visible int) (start, end int) {
+	if visible <= 0 || len(s.storeNodes) == 0 {
+		return 0, 0
+	}
+	selected := max(0, min(s.storeSelected, len(s.storeNodes)-1))
+	start = max(0, selected-visible+1)
+	return start, min(start+visible, len(s.storeNodes))
 }

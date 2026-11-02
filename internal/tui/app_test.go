@@ -10,6 +10,7 @@ import (
 
 	"lazypass/internal/config"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/service"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -37,6 +38,13 @@ func (m *memoryVault) Write(_ context.Context, entry vault.Entry) error {
 	return m.err
 }
 func (m *memoryVault) Delete(context.Context, vault.Path) error { return nil }
+
+func (m *memoryVault) Create(ctx context.Context, entry vault.Entry) error {
+	if err := (service.Service{Provider: m}).CheckNewPath(ctx, entry.Path); err != nil {
+		return err
+	}
+	return m.Write(ctx, entry)
+}
 func (m *memoryVault) Sync(context.Context) (vault.SyncResult, error) {
 	return vault.SyncResult{}, nil
 }

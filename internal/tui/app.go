@@ -12,7 +12,6 @@ import (
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/tui/themepanel"
 	vaultui "lazypass/internal/tui/vault"
-	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 
 	"github.com/rivo/tview"
@@ -29,6 +28,13 @@ type Option func(*screen)
 
 func WithVault(v service.Service) Option  { return func(s *screen) { s.vaultService = v } }
 func WithInitialRoute(route Route) Option { return func(s *screen) { s.route = route } }
+
+type NamedVault struct {
+	Name    string
+	Service service.Service
+}
+
+func WithVaults(vaults []NamedVault) Option { return func(s *screen) { s.vaults = vaults } }
 
 type App struct {
 	app    *tview.Application
@@ -52,6 +58,15 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	}
 	app := tview.NewApplication().EnableMouse(true)
 	s.quit, s.suspend = app.Stop, app.Suspend
+	s.dispatch = func(ctx context.Context, fn func()) {
+		if ctx.Err() == nil {
+			app.QueueUpdateDraw(func() {
+				if ctx.Err() == nil {
+					fn()
+				}
+			})
+		}
+	}
 	s.generator = generatorui.New(cfg.ToOptions(), generatorui.Dependencies{
 		Copy:        onCopy,
 		SaveOptions: s.saveOptions,
@@ -59,35 +74,18 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 		OpenStore:   s.openStoreForm,
 		OpenThemes:  s.openThemePanel,
 	})
-	s.vault = vaultui.New(vaultui.Dependencies{
-		Dispatch: func(ctx context.Context, fn func()) {
-			if ctx.Err() == nil {
-				app.QueueUpdateDraw(func() {
-					if ctx.Err() == nil {
-						fn()
-					}
-				})
-			}
-		},
-		OpenEdit:    s.openVaultEdit,
-		OpenAdd:     s.openVaultAdd,
-		Service:     s.vaultService,
-		RunPrompted: s.runPrompted,
-		Notify:      s.notify,
-		OpenThemes:  s.openThemePanel,
-	})
-	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
-		Service:     s.vaultService,
-		Password:    s.generator.Password,
-		Notify:      s.notify,
-		Closed:      func() { s.overlay = noOverlay },
-		RunPrompted: s.runPrompted,
-		Saved: func(_ vault.Path) {
-			if s.route == VaultRoute {
-				s.vault.Refresh()
-			}
-		},
-	})
+	if len(s.vaults) == 0 {
+		s.vaults = []NamedVault{{Service: s.vaultService}}
+	}
+	s.vaultViews = make([]*vaultui.View, len(s.vaults))
+	initialVault := 0
+	for i, item := range s.vaults {
+		if item.Name == cfg.LastVault {
+			initialVault = i
+			break
+		}
+	}
+	s.activateVault(initialVault)
 	s.themePanel = themepanel.New(themepanel.Dependencies{
 		CurrentPalette:  func() shared.Palette { return s.colors },
 		CurrentTheme:    func() string { return s.cfg.Theme },
@@ -115,6 +113,6 @@ func (a *App) Init() error {
 	return nil
 }
 func (a *App) Run() error {
-	defer a.screen.vault.CancelSearch()
+	defer a.screen.closeVaults()
 	return a.app.Run()
 }

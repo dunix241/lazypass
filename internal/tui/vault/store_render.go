@@ -34,13 +34,14 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.storeMessage != "" {
 		shared.PrintAt(screen, r.X+2, r.Y+5, shared.Truncate(s.storeMessage, r.W-4), colors.Warning)
 	} else if visible > 0 {
-		shared.PrintAt(screen, r.X+2, r.Y+5, "Folders:", colors.Muted)
-		for i := 0; i < visible; i++ {
+		start, end := s.suggestionWindow(visible)
+		for index := start; index < end; index++ {
+			node := s.storeNodes[index]
 			prefix := "  "
-			if i == s.storeSelected {
+			if index == s.storeSelected {
 				prefix = "> "
 			}
-			shared.PrintAt(screen, r.X+2, r.Y+6+i, shared.Truncate(prefix+nodeLabel(s.storeNodes[i], frame.NerdFont), r.W-4), colors.Accent)
+			shared.PrintAt(screen, r.X+2, r.Y+5+index-start, shared.Truncate(prefix+nodeLabel(node, frame.NerdFont), r.W-4), nodeColor(node, colors))
 		}
 	}
 	help := storeFormHelp(r.W - 4)
@@ -54,6 +55,6 @@ func storeFormHelp(width int) string {
 func (s *StoreForm) storeFormRect(viewport shared.Rect) (shared.Rect, int) {
 	w := min(52, viewport.W-4)
 	maxHeight := viewport.H - 4
-	visible := min(4, min(max(0, maxHeight-9), len(s.storeNodes)))
-	return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + max(2, (viewport.H-(9+visible))/2), W: w, H: 9 + visible}, visible
+	visible := min(5, min(max(0, maxHeight-8), len(s.storeNodes)))
+	return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + max(2, (viewport.H-(8+visible))/2), W: w, H: 8 + visible}, visible
 }

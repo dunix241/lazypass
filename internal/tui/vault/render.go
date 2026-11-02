@@ -14,9 +14,13 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	if len(s.vaultPath) > 0 {
 		path += s.vaultPath.String()
 	}
-	shared.PrintAt(screen, r.X+2, r.Y, " Vault: "+path+" ", colors.Accent)
+	title := "Vault"
+	if s.deps.Name != "" {
+		title += " · " + s.deps.Name
+	}
+	shared.PrintAt(screen, r.X+2, r.Y, shared.Truncate(" "+title+": "+path+" ", r.W-4), colors.Accent)
 	if s.vault.Provider == nil {
-		shared.PrintAt(screen, r.X+2, r.Y+2, "Vault unavailable. Configure vault.provider: pass.", colors.Warning)
+		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)
 		return
 	}
 	if s.vaultFiltering {

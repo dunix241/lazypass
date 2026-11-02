@@ -28,6 +28,10 @@ type Runner interface {
 type ExecRunner struct{ Terminal io.Reader }
 
 func (r ExecRunner) Run(ctx context.Context, name string, args []string, stdin io.Reader, env []string) ([]byte, error) {
+	env = append(os.Environ(), env...)
+	if len(args) > 0 && (args[0] == "show" || args[0] == "insert" || args[0] == "init") {
+		env = prepareGPGTerminal(ctx, env, r.Terminal)
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	if stdin == nil {
 		stdin = r.Terminal
@@ -36,7 +40,7 @@ func (r ExecRunner) Run(ctx context.Context, name string, args []string, stdin i
 		}
 	}
 	cmd.Stdin = stdin
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = env
 	output, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -290,6 +294,8 @@ func passOperation(args []string) debug.Operation {
 		return "pass show"
 	case "insert":
 		return "pass insert"
+	case "init":
+		return "pass init"
 	case "rm":
 		return "pass remove"
 	case "git":

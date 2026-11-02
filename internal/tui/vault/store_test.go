@@ -96,7 +96,7 @@ func TestStorePickerMouseSelectsAndCompletesFolder(t *testing.T) {
 	s.Open()
 	f := testFrame()
 	r, _ := s.storeFormRect(f.Viewport)
-	event := tcell.NewEventMouse(r.X+2, r.Y+7, tcell.Button1, tcell.ModNone)
+	event := tcell.NewEventMouse(r.X+2, r.Y+6, tcell.Button1, tcell.ModNone)
 	s.HandleMouse(tview.MouseLeftDown, event, f)
 	if s.storeSelected != 1 {
 		t.Fatal("mouse selection failed")

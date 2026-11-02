@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestDefaultsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if loaded != c {
+	if !reflect.DeepEqual(loaded, c) {
 		t.Fatalf("round-trip mismatch: %+v vs %+v", loaded, c)
 	}
 }
@@ -41,7 +42,7 @@ func TestWithOptionsPreservesTheme(t *testing.T) {
 func TestVaultConfigRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	c := Defaults()
-	c.Vault = Vault{Provider: "pass", StoreDir: "/vault"}
+	c.Vaults = Vaults{{Name: "pass", Provider: "pass", StoreDir: "/vault"}}
 	if err := c.Save(path); err != nil {
 		t.Fatal(err)
 	}
@@ -49,15 +50,90 @@ func TestVaultConfigRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Vault != c.Vault {
-		t.Fatalf("vault = %#v, want %#v", loaded.Vault, c.Vault)
+	if !reflect.DeepEqual(loaded.Vaults, c.Vaults) {
+		t.Fatalf("vaults = %#v, want %#v", loaded.Vaults, c.Vaults)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "vault:\n  provider: pass\n  storeDir: /vault\n") {
+	if !strings.Contains(string(data), "vaults:\n  - name: pass\n    provider: pass\n    storeDir: /vault\n") {
 		t.Fatalf("config does not use two-space indentation:\n%s", data)
+	}
+}
+
+func TestLegacyLastVaultIsNotSavedInConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("lastVault: personal\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LastVault != "personal" {
+		t.Fatal("legacy selection not available for migration")
+	}
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "lastVault") {
+		t.Fatal("session state saved in config")
+	}
+}
+
+func TestLegacyVaultMappingMigratesToNamedList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("vault:\n  provider: pass\n  storeDir: /fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Vaults) != 1 || cfg.Vaults[0].Name != "pass" || cfg.Vaults[0].StoreDir != "/fixture" {
+		t.Fatal("legacy mapping not migrated")
+	}
+}
+
+func TestVaultsKeyMigrationAndPrecedence(t *testing.T) {
+	for _, legacy := range []string{"  provider: pass\n", "  - name: work\n    provider: pass\n"} {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte("vault:\n"+legacy), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cfg.Vaults) != 1 {
+			t.Fatal("legacy vault not loaded")
+		}
+		if err := cfg.Save(path); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "vaults:") || strings.Contains(string(data), "\nvault:") {
+			t.Fatal("save retained legacy key")
+		}
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("vault:\n  provider: pass\nvaults: []\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Vaults) != 0 {
+		t.Fatal("legacy key overrode explicit vaults")
 	}
 }
 
@@ -83,7 +159,7 @@ func TestMissingFileGivesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if loaded != Defaults() {
+	if !reflect.DeepEqual(loaded, Defaults()) {
 		t.Fatalf("expected defaults, got %+v", loaded)
 	}
 }

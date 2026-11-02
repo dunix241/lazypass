@@ -1,117 +1,21 @@
 # lazypass
 
-Interactive local password generator for the terminal. `lazypass` opens an interactive TUI; `lazypass generate` prints passwords for scripts. Whatever you change is saved and used again next time.
+Generate and manage passwords from your terminal. Open the interactive app, or
+generate passwords directly from the command line. Your preferences are saved
+for next time.
 
 ## Features
 
-- TUI and CLI in one binary; scripts get plain stdout.
-- Live strength meter: entropy in bits (`length × log2(pool size)`), labeled Weak below 40, Fair below 60, Good below 80, Strong at 80 and above.
-- Options save automatically and are reused next time; inspect with `config path` / `config show`.
-- Generation uses the OS cryptographic random source via `crypto/rand`, so every character is equally likely. One character per enabled class is guaranteed.
-- Ambiguous-character filter (`I l 1 O 0`) and custom symbol set.
-- Copy uses the system clipboard locally and the terminal clipboard (OSC 52) over SSH.
-- JSON output (`generate --format json`) with password, length, entropy bits, and strength.
-- Layout adapts to narrow or short terminals (minimum 32×18), mouse input supported.
-- Optional encrypted vault with pluggable backends (`pass` included), folder-organized entries, and Git sync.
+- Customizable password length and character sets, with a live strength meter.
+- Encrypted vaults for generated passwords and values you already have.
+- Multiple vaults, folders, recursive search, and entry editing.
+- Built-in themes and a custom-theme editor.
+- Clipboard support locally and over SSH.
+- Plain text and JSON output for scripts.
 
 ## Demo
 
 ![Demo](assets/demo.gif)
-
-## Usage
-
-```
-lazypass              # TUI
-lazypass generate     # one password to stdout
-```
-
-### TUI
-
-| Key                     | Action                                                           |
-| ----------------------- | ---------------------------------------------------------------- |
-| `←` / `→`               | decrease / increase length                                       |
-| `-` / `+`               | decrease / increase length                                       |
-| `0`–`9`                 | type length directly (while length field is focused)             |
-| `Backspace`             | delete a typed digit                                             |
-| `U` `L` `N` `S` `E`     | toggle uppercase, lowercase, numbers, symbols, exclude-ambiguous |
-| `Space` / `Enter`       | toggle or activate focused item                                  |
-| `Tab` / `↓` / `j`       | next item                                                        |
-| `Shift+Tab` / `↑` / `k` | previous item                                                    |
-| `r`                     | regenerate                                                       |
-| `c`                     | copy to clipboard                                                |
-| `a`                     | add the generated password to Vault                              |
-| `t`                     | open the theme picker and custom-theme editor                    |
-| `q` / `Esc`             | save and quit                                                    |
-
-### CLI
-
-```
-lazypass generate --length 32 --symbols --count 5
-lazypass generate --format json --copy
-lazypass --no-tui -l 24 --no-numbers
-```
-
-Available options: `-l/--length` (4–256), `--upper` / `--no-upper`, `--lower` / `--no-lower`, `--numbers` / `--no-numbers`, `--symbols` / `--no-symbols`, `--exclude-ambiguous`, `--symbol-set`, `--count`, `--format text|json`, `--copy`, `--no-save`. Piping output also skips the TUI (same as `--no-tui`).
-
-Options you pass explicitly are saved as your new defaults; add `--no-save` to keep it a one-off. Contradictory pairs like `--upper --no-upper` are rejected.
-
-### Themes
-
-The TUI includes Midnight Rose, Nord, Mono, Gruvbox, Catppuccin Mocha, OneDark,
-Dracula, Tokyo Night, and Rosé Pine. Press `t` to preview and apply themes,
-create editable copies, edit `#RRGGBB` role colors, or delete custom themes.
-Custom themes are stored in `~/.config/lazypass/themes`; `lazypass theme list`,
-`path`, and `show <name>` inspect them from the CLI. An unavailable or invalid
-selection falls back to Midnight Rose and reports a nonfatal status.
-
-### Vault
-
-lazypass can store passwords in an encrypted vault. Backends are pluggable:
-`pass` (the standard Unix password manager) ships today, with a native age
-vault, KeePassXC, Bitwarden, and 1Password planned. Using `pass` needs it
-installed and an initialized store (`pass init`), enabled with:
-
-```yaml
-vault:
-  provider: pass
-```
-
-`lazypass vault` opens the vault browser; `v` switches between the generator
-and vault views, and `a` stores the generated password. From the CLI:
-
-```
-lazypass vault list [path]   # folders and entries
-lazypass vault show <path>   # entry metadata, never the password
-lazypass vault store <path>  # password read from stdin
-lazypass vault copy <path>   # copy without printing
-lazypass vault sync          # pull and push the Git store
-lazypass vault status        # backend setup state
-```
-
-Entries live in folders (`personal/mail`) and can carry a username, URL, notes,
-and custom fields.
-
-### Saved options
-
-Options live in `~/.config/lazypass/config.yaml` (XDG). `lazypass config path` prints the resolved path and `lazypass config show` prints the saved options. Use `--config <file>` or `LAZYPASS_CONFIG` to point elsewhere.
-
-If generate/strength output matters in automation, `--format json` emits one JSON object per line with `password`, `length`, `entropyBits`, and `strength`.
-
-### Clipboard
-
-Clipboard copy needs `wl-copy` (Wayland) or `xclip` (X11) on Linux; macOS and Windows use their native tooling.
-
-Over SSH, copy uses OSC 52 to write to your **client terminal's clipboard**.
-Use an interactive session (`ssh -t host`) and a terminal that permits OSC 52
-clipboard writes. No remote display server or `wl-copy` is required. When
-lazypass runs inside remote tmux, enable `set -g allow-passthrough on` in that
-tmux server's configuration. A local tmux layer must also support clipboard
-forwarding (for example, `set -g set-clipboard on`).
-
-### Diagnostics
-
-Set `LAZYPASS_DEBUG=1` to log failures to `$XDG_STATE_HOME/lazypass/debug.log`
-(default `~/.local/state/lazypass/debug.log`).
 
 ## Install
 
@@ -119,10 +23,67 @@ Set `LAZYPASS_DEBUG=1` to log failures to `$XDG_STATE_HOME/lazypass/debug.log`
 mkdir -p ~/.local/bin && OS=$(uname -s) && ARCH=$(uname -m | sed 's/aarch64/arm64/') && curl -fsSL "https://github.com/dunix241/lazypass/releases/latest/download/lazypass_${OS}_${ARCH}.tar.gz" | tar -xz -C ~/.local/bin lazypass
 ```
 
-Make sure `~/.local/bin` is on your `PATH`. Alternatively:
+Make sure `~/.local/bin` is on your `PATH`. Prebuilt releases support Linux,
+macOS, and Windows. To build from source, run `make build`; the binary is
+written to `.build/lazypass`.
 
-```
-go install github.com/dunix241/lazypass@latest
+## Usage
+
+### TUI mode
+
+Open the interactive app to generate passwords and manage your vaults:
+
+```sh
+lazypass                         # open the app
+lazypass vault                   # open your vaults
 ```
 
-Or build from source: `make build` (binary lands in `.build/lazypass`). Prebuilt archives for Linux, macOS, and Windows (x86_64, arm64) are attached to GitHub releases. For Arch, `packaging/aur` documents the `lazypass-bin` package update flow.
+Available actions are shown in the app as you use it.
+
+### CLI mode
+
+Generate passwords directly for shell commands and scripts:
+
+```sh
+lazypass generate --length 32 --symbols
+lazypass generate --format json --count 5
+```
+
+Use `--help` on any command for its options. Explicit generation options become your defaults;
+add `--no-save` for a one-off command.
+
+### Vaults
+
+Choose a provider to get started:
+
+- [age](docs/providers/age.md): built-in encryption with a passphrase-protected identity.
+- [pass](docs/providers/pass.md): use the Unix password manager and your GPG keys.
+
+You can keep multiple named vaults and switch between them in the app. For CLI
+commands, select one with `--vault <name>`:
+
+```sh
+lazypass --vault personal vault list
+lazypass --vault personal vault copy personal/email
+```
+
+### Configuration
+
+Settings are stored in `~/.config/lazypass/config.yaml`. Use `lazypass config path`
+to find your file or `lazypass config show` to inspect it. A different config
+can be selected with `--config <file>` or `LAZYPASS_CONFIG`.
+
+### Clipboard over SSH
+
+SSH copy uses your terminal's clipboard support (OSC 52). Use an interactive
+SSH session and a terminal that permits clipboard writes. For remote tmux,
+enable `set -g allow-passthrough on`; a local tmux layer also needs clipboard
+forwarding, such as `set -g set-clipboard on`.
+
+For local Linux clipboard support, install `wl-copy` on Wayland or `xclip` on
+X11. macOS and Windows use native clipboard tools.
+
+### Troubleshooting
+
+Set `LAZYPASS_DEBUG=1` to record failure diagnostics in
+`~/.local/state/lazypass/debug.log` (or `$XDG_STATE_HOME/lazypass/debug.log`).
