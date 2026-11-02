@@ -20,7 +20,11 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	if s.vaultFiltering {
-		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate("Search: "+s.vaultFilter+"_", r.W-4), colors.Muted)
+		label := "Search: " + s.vaultFilter + "_"
+		if s.searching {
+			label += " (searching…)"
+		}
+		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate(label, r.W-4), colors.Muted)
 	}
 	if s.vaultError != "" {
 		listY, _, _ := s.vaultListWindow(r)

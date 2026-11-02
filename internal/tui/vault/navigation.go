@@ -24,6 +24,7 @@ func (s *View) Refresh() {
 	if s.vaultFiltering {
 		s.loadSearchNodes()
 	} else {
+		s.CancelSearch()
 		s.searchNodes = nil
 		s.searchLoaded = false
 	}

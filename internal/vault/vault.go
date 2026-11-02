@@ -114,6 +114,11 @@ type FolderCreator interface {
 	CreateFolder(context.Context, Path) error
 }
 
+// EntryCreator publishes a new entry without replacing an existing entry.
+type EntryCreator interface {
+	Create(context.Context, Entry) error
+}
+
 type FolderDeleter interface {
 	DeleteFolder(context.Context, Path) error
 }

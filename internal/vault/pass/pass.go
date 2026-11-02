@@ -48,8 +48,9 @@ func (r ExecRunner) Run(ctx context.Context, name string, args []string, stdin i
 }
 
 type Provider struct {
-	StoreDir string
-	Runner   Runner
+	StoreDir   string
+	Runner     Runner
+	disableGit bool
 }
 
 func New(storeDir string, runner Runner) *Provider {
@@ -105,6 +106,9 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 			continue
 		}
 		name := item.Name()
+		if strings.HasPrefix(name, ".lazypass-create-") {
+			continue
+		}
 		if item.IsDir() {
 			if err := (vault.Path{name}).Validate(); err == nil {
 				nodes = append(nodes, vault.Node{Path: appendPath(path, name), Name: name, Kind: vault.FolderNode})
@@ -203,6 +207,10 @@ func (p *Provider) run(parent context.Context, args []string, stdin io.Reader) (
 	ctx, cancel := context.WithTimeout(parent, commandTimeout)
 	defer cancel()
 	env := []string{"PASSWORD_STORE_DIR=" + p.storeDir()}
+	if p.disableGit {
+		// Prevent pass from discovering an ancestor repository during staging.
+		env = append(env, "GIT_DIR="+filepath.Join(p.storeDir(), ".git"))
+	}
 	if vault.IsNoninteractive(parent) {
 		// pinentry-mode=error permits agent-cache use, but never starts a prompt
 		// under the active TUI. Preserve any configured GPG options.

@@ -79,6 +79,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 }
 
 func (s *screen) switchRoute() {
+	s.vault.CancelSearch()
 	s.generator.ReleaseMouse()
 	if s.route == GeneratorRoute {
 		s.route = VaultRoute

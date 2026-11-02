@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 
 	"lazypass/internal/config"
@@ -59,6 +60,15 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 		OpenThemes:  s.openThemePanel,
 	})
 	s.vault = vaultui.New(vaultui.Dependencies{
+		Dispatch: func(ctx context.Context, fn func()) {
+			if ctx.Err() == nil {
+				app.QueueUpdateDraw(func() {
+					if ctx.Err() == nil {
+						fn()
+					}
+				})
+			}
+		},
 		OpenEdit:    s.openVaultEdit,
 		OpenAdd:     s.openVaultAdd,
 		Service:     s.vaultService,
@@ -104,4 +114,7 @@ func (a *App) Init() error {
 	a.app.SetRoot(a.screen, true).SetFocus(a.screen)
 	return nil
 }
-func (a *App) Run() error { return a.app.Run() }
+func (a *App) Run() error {
+	defer a.screen.vault.CancelSearch()
+	return a.app.Run()
+}

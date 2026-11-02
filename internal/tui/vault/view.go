@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"context"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
@@ -13,22 +14,26 @@ type Dependencies struct {
 	OpenThemes  func()
 	OpenAdd     func()
 	OpenEdit    func(vault.Path)
+	Dispatch    func(context.Context, func())
 }
 
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
-	vault          service.Service
-	vaultPath      vault.Path
-	vaultNodes     []vault.Node
-	vaultSelected  int
-	vaultError     string
-	vaultFilter    string
-	vaultFiltering bool
-	searchNodes    []vault.Node
-	searchLoaded   bool
-	deps           Dependencies
-	deleteTarget   *vault.Node
+	vault            service.Service
+	vaultPath        vault.Path
+	vaultNodes       []vault.Node
+	vaultSelected    int
+	vaultError       string
+	vaultFilter      string
+	vaultFiltering   bool
+	searchNodes      []vault.Node
+	searchLoaded     bool
+	searchCancel     context.CancelFunc
+	searchGeneration uint64
+	searching        bool
+	deps             Dependencies
+	deleteTarget     *vault.Node
 }
 
 func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }

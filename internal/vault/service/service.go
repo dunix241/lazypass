@@ -71,6 +71,13 @@ func (s Service) CheckNewPath(ctx context.Context, path vault.Path) error {
 }
 
 func (s Service) Create(ctx context.Context, entry vault.Entry) error {
+	p, err := s.provider()
+	if err != nil {
+		return err
+	}
+	if creator, ok := p.(vault.EntryCreator); ok {
+		return creator.Create(ctx, entry)
+	}
 	if err := s.CheckNewPath(ctx, entry.Path); err != nil {
 		return err
 	}
