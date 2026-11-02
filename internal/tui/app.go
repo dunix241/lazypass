@@ -113,6 +113,9 @@ func (a *App) Init() error {
 	return nil
 }
 func (a *App) Run() error {
-	defer a.screen.closeVaults()
+	ctx, cancel := context.WithCancel(context.Background())
+	a.screen.operationContext = ctx
+	a.screen.running = true
+	defer func() { cancel(); a.screen.closeVaults() }()
 	return a.app.Run()
 }

@@ -15,11 +15,16 @@ func (s *screen) runPrompted(fn func(context.Context) error) error {
 	if !errors.Is(err, vault.ErrPromptRequired) {
 		return err
 	}
+	return s.withTerminal(func() error { return fn(ctx) })
+}
+
+func (s *screen) withTerminal(fn func() error) error {
 	if s.suspend == nil {
-		return fn(ctx)
+		return fn()
 	}
-	if !s.suspend(func() { err = fn(ctx) }) {
-		return fn(ctx)
+	var err error
+	if !s.suspend(func() { err = fn() }) {
+		return fn()
 	}
 	return err
 }

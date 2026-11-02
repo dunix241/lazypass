@@ -16,24 +16,26 @@ func (s *screen) activateVault(index int) {
 	selected := s.vaults[index]
 	if s.vaultViews[index] == nil {
 		s.vaultViews[index] = vaultui.New(vaultui.Dependencies{
-			Name:        selected.Name,
-			Service:     selected.Service,
-			RunPrompted: s.runPrompted,
-			Notify:      s.notify,
-			OpenThemes:  s.openThemePanel,
-			OpenAdd:     s.openVaultAdd,
-			OpenEdit:    s.openVaultEdit,
-			OpenPicker:  s.openVaultPicker,
-			Dispatch:    s.dispatch,
+			Name:         selected.Name,
+			Service:      selected.Service,
+			RunPrompted:  s.runPrompted,
+			RunOperation: s.operationRunner(),
+			Notify:       s.notify,
+			OpenThemes:   s.openThemePanel,
+			OpenAdd:      s.openVaultAdd,
+			OpenEdit:     s.openVaultEdit,
+			OpenPicker:   s.openVaultPicker,
+			Dispatch:     s.dispatch,
 		})
 	}
 	s.vault = s.vaultViews[index]
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
-		Service:     selected.Service,
-		Password:    s.generator.Password,
-		Notify:      s.notify,
-		Closed:      func() { s.overlay = noOverlay },
-		RunPrompted: s.runPrompted,
+		Service:      selected.Service,
+		Password:     s.generator.Password,
+		Notify:       s.notify,
+		Closed:       func() { s.overlay = noOverlay },
+		RunPrompted:  s.runPrompted,
+		RunOperation: s.operationRunner(),
 		Saved: func(vault.Path) {
 			if s.route == VaultRoute {
 				s.vault.Refresh()

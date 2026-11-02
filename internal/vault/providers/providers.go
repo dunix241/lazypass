@@ -4,12 +4,14 @@ package providers
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
 	"lazypass/internal/config"
 	"lazypass/internal/vault"
 	ageprovider "lazypass/internal/vault/age"
+	"lazypass/internal/vault/bitwarden"
 	passprovider "lazypass/internal/vault/pass"
 )
 
@@ -27,6 +29,23 @@ type Registry map[string]Factory
 
 func Builtins() Registry {
 	return Registry{
+		"bitwarden": func(entry config.Vault, prompt Prompt) (Managed, error) {
+			if entry.Server != "" {
+				u, err := url.Parse(entry.Server)
+				if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+					return nil, fmt.Errorf("Bitwarden server must be an HTTPS URL without credentials, query, or fragment")
+				}
+			}
+			dir := entry.StoreDir
+			if dir == "" {
+				base, err := os.UserConfigDir()
+				if err != nil {
+					return nil, err
+				}
+				dir = filepath.Join(base, "lazypass", "bitwarden", entry.Name)
+			}
+			return bitwarden.New(dir, entry.Server, bitwarden.Prompt(prompt), nil), nil
+		},
 		"pass": func(entry config.Vault, _ Prompt) (Managed, error) {
 			return passprovider.New(entry.StoreDir, nil), nil
 		},

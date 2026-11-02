@@ -15,12 +15,43 @@ func (s *StoreForm) refreshStoreSuggestions() {
 	if err != nil {
 		return
 	}
-	nodes, err := s.deps.Service.List(context.Background(), path)
-	if err != nil {
-		if !errors.Is(err, vault.ErrNotFound) {
-			debug.Failure("vault suggestions", vaultFailureCause(err))
-			s.storeMessage = "Items cannot be loaded. Type a destination instead."
+	nodes, cached := s.suggestions[path.String()]
+	if !cached {
+		key := path.String()
+		if s.suggestionPending == nil {
+			s.suggestionPending = make(map[string]bool)
 		}
+		if s.suggestionPending[key] {
+			return
+		}
+		s.suggestionPending[key] = true
+		generation := s.suggestionGeneration
+		provider := s.deps.Service
+		s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
+			var err error
+			nodes, err = provider.List(ctx, path)
+			return err
+		}, func(err error) {
+			if generation != s.suggestionGeneration || !s.open {
+				return
+			}
+			delete(s.suggestionPending, key)
+			if err != nil && !errors.Is(err, vault.ErrNotFound) {
+				if !errors.Is(err, vault.ErrNotFound) {
+					debug.Failure("vault suggestions", vaultFailureCause(err))
+					s.storeMessage = "Items cannot be loaded. Type a destination instead."
+				}
+				return
+			}
+			if s.suggestions == nil {
+				s.suggestions = make(map[string][]vault.Node)
+			}
+			s.suggestions[path.String()] = nodes
+			current, _, parseErr := storeSuggestionQuery(s.storePath)
+			if parseErr == nil && current.String() == key {
+				s.refreshStoreSuggestions()
+			}
+		})
 		return
 	}
 	needle := strings.ToLower(prefix)

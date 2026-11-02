@@ -71,3 +71,29 @@ func TestDeleteParentAndFailure(t *testing.T) {
 		t.Fatal("failed delete retained confirmation")
 	}
 }
+
+func TestAsyncDeletionSuppressesRepeatAndAllowsCancel(t *testing.T) {
+	var work func(context.Context) error
+	var done func(error)
+	p := &deletingVault{memoryVault: memoryVault{nodes: map[string][]vault.Node{"": {{Name: "target", Path: vault.Path{"target"}, Kind: vault.EntryNode}}}}}
+	v := New(Dependencies{Service: service.Service{Provider: p}})
+	v.Refresh()
+	key(v, tcell.KeyRune, 'd')
+	key(v, tcell.KeyEscape, 0)
+	if v.deleting {
+		t.Fatal("cancel marked deletion in progress")
+	}
+	v.deps.RunOperation = func(w func(context.Context) error, d func(error)) { work, done = w, d }
+	key(v, tcell.KeyRune, 'd')
+	key(v, tcell.KeyRune, 'y')
+	key(v, tcell.KeyRune, 'd')
+	if !v.deleting || v.IsConfirmingDelete() {
+		t.Fatal("repeat deletion accepted")
+	}
+	err := work(context.Background())
+	v.deps.RunOperation = nil
+	done(err)
+	if v.deleting {
+		t.Fatal("deletion busy state retained")
+	}
+}

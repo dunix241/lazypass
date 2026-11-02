@@ -23,6 +23,10 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)
 		return
 	}
+	if s.loading {
+		shared.PrintAt(screen, r.X+2, r.Y+2, "Loading…", colors.Muted)
+		return
+	}
 	if s.vaultFiltering {
 		label := "Search: " + s.vaultFilter + "_"
 		if s.searching {

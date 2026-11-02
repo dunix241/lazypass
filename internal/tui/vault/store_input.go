@@ -13,6 +13,9 @@ import (
 )
 
 func (s *StoreForm) HandleKey(event *tcell.EventKey) {
+	if s.saving {
+		return
+	}
 	if s.editingValue {
 		s.handleValueKey(event)
 		return
@@ -46,12 +49,15 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 				s.notify(shared.Warning, "Enter a valid vault destination")
 				return
 			}
-			if err := s.deps.Service.CheckNewPath(context.Background(), path); err != nil {
-				s.notify(shared.Warning, storeErrorMessage(err))
-				return
-			}
-			s.editingValue = true
-			s.storeMessage = ""
+			provider := s.deps.Service
+			s.run(func(ctx context.Context) error { return provider.CheckNewPath(ctx, path) }, func(err error) {
+				if err != nil {
+					s.notify(shared.Warning, storeErrorMessage(err))
+					return
+				}
+				s.editingValue = true
+				s.storeMessage = ""
+			})
 			return
 		}
 		s.store()
@@ -75,27 +81,30 @@ func (s *StoreForm) store() {
 	} else if s.deps.Password != nil {
 		password = s.deps.Password()
 	}
-	if err := s.deps.RunPrompted.Execute(func(ctx context.Context) error {
-		entry := vault.Entry{Path: path, Password: password}
-		if s.editEntry != nil {
-			entry = *s.editEntry
-			entry.Password = password
-			return s.deps.Service.Store(ctx, entry)
-		}
-		return s.deps.Service.Create(ctx, entry)
-	}); err != nil {
-		var diagnostic vault.Diagnostic
-		if !errors.As(err, &diagnostic) {
-			debug.Failure("vault store", vaultFailureCause(err))
-		}
-		s.notify(shared.Error, storeErrorMessage(err))
-		return
+	entry := vault.Entry{Path: path, Password: password}
+	editing := s.editEntry != nil
+	if editing {
+		entry = *s.editEntry
+		entry.Password = password
 	}
-	if s.deps.Saved != nil {
-		s.deps.Saved(path)
-	}
-	s.Close()
-	s.notify(shared.Success, "Stored in vault")
+	s.notify(shared.Info, "Saving…")
+	provider := s.deps.Service
+	s.run(func(ctx context.Context) error {
+		if editing {
+			return provider.Store(ctx, entry)
+		}
+		return provider.Create(ctx, entry)
+	}, func(err error) {
+		if err != nil {
+			var diagnostic vault.Diagnostic
+			if !errors.As(err, &diagnostic) {
+				debug.Failure("vault store", vaultFailureCause(err))
+			}
+			s.notify(shared.Error, storeErrorMessage(err))
+			return
+		}
+		s.saved(path, "Stored in vault")
+	})
 }
 
 func (s *StoreForm) createFolder() {
@@ -104,15 +113,15 @@ func (s *StoreForm) createFolder() {
 		s.notify(shared.Warning, "Enter a valid folder destination")
 		return
 	}
-	if err := s.deps.Service.CreateFolder(context.Background(), path); err != nil {
-		s.notify(shared.Error, storeErrorMessage(err))
-		return
-	}
-	if s.deps.Saved != nil {
-		s.deps.Saved(path)
-	}
-	s.Close()
-	s.notify(shared.Success, "Folder created")
+	s.notify(shared.Info, "Creating folder…")
+	provider := s.deps.Service
+	s.run(func(ctx context.Context) error { return provider.CreateFolder(ctx, path) }, func(err error) {
+		if err != nil {
+			s.notify(shared.Error, storeErrorMessage(err))
+			return
+		}
+		s.saved(path, "Folder created")
+	})
 }
 
 func (s *StoreForm) handleValueKey(event *tcell.EventKey) {

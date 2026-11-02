@@ -13,6 +13,9 @@ import (
 )
 
 func (s *View) openDelete() {
+	if s.deleting {
+		return
+	}
 	node, ok := s.selectedVaultNode()
 	if !ok || s.isVaultParentNode(node) || len(node.Path) == 0 {
 		return
@@ -38,19 +41,23 @@ func (s *View) handleDeleteKey(event *tcell.EventKey) {
 		s.deleteTarget = nil
 	case 'y', 'Y':
 		node := *s.deleteTarget
-		if err := s.vault.Delete(context.Background(), node); err != nil {
-			debug.Failure("vault delete", vaultFailureCause(err))
-			message := "Delete failed"
-			if errors.Is(err, vault.ErrUnsupported) {
-				message = "Deletion unavailable"
-			}
-			s.deleteTarget = nil
-			s.notify(shared.Error, message)
-			return
-		}
 		s.deleteTarget = nil
-		s.Refresh()
-		s.notify(shared.Success, "Deleted from vault")
+		s.deleting = true
+		s.notify(shared.Info, "Deleting…")
+		s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error { return s.vault.Delete(ctx, node) }, func(err error) {
+			s.deleting = false
+			if err != nil {
+				debug.Failure("vault delete", vaultFailureCause(err))
+				message := "Delete failed"
+				if errors.Is(err, vault.ErrUnsupported) {
+					message = "Deletion unavailable"
+				}
+				s.notify(shared.Error, message)
+				return
+			}
+			s.Refresh()
+			s.notify(shared.Success, "Deleted from vault")
+		})
 	}
 }
 

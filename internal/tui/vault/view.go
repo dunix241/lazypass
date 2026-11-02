@@ -8,20 +8,25 @@ import (
 )
 
 type Dependencies struct {
-	Name        string
-	Service     service.Service
-	RunPrompted PromptRunner
-	Notify      func(shared.Level, string)
-	OpenThemes  func()
-	OpenAdd     func()
-	OpenEdit    func(vault.Path)
-	OpenPicker  func()
-	Dispatch    func(context.Context, func())
+	RunOperation OperationRunner
+	Name         string
+	Service      service.Service
+	RunPrompted  PromptRunner
+	Notify       func(shared.Level, string)
+	OpenThemes   func()
+	OpenAdd      func()
+	OpenEdit     func(vault.Path)
+	OpenPicker   func()
+	Dispatch     func(context.Context, func())
 }
 
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	deleting         bool
+	loading          bool
+	copying          bool
+	loadGeneration   uint64
 	vault            service.Service
 	vaultPath        vault.Path
 	vaultNodes       []vault.Node

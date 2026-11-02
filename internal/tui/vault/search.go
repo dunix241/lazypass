@@ -86,7 +86,7 @@ func collectSearchNodes(ctx context.Context, provider service.Service, root vaul
 		nodes := initial
 		if head > 0 {
 			var err error
-			nodes, err = provider.List(ctx, path)
+			nodes, err = provider.List(vault.WithoutPrompt(ctx), path)
 			if err != nil {
 				partial = true
 				continue

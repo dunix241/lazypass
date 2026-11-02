@@ -67,6 +67,7 @@ type Vault struct {
 	Provider     string `yaml:"provider"`
 	StoreDir     string `yaml:"storeDir"`
 	IdentityFile string `yaml:"identityFile,omitempty"`
+	Server       string `yaml:"server,omitempty"`
 }
 
 type Vaults []Vault

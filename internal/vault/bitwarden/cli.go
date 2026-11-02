@@ -1,0 +1,211 @@
+// Package bitwarden adapts the official bw CLI for Bitwarden and Vaultwarden.
+package bitwarden
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+
+	"lazypass/internal/debug"
+	"lazypass/internal/vault"
+)
+
+const DefaultServer = "https://vault.bitwarden.com"
+
+type Runner interface {
+	Run(context.Context, []string, io.Reader, []string) ([]byte, error)
+}
+
+type ExecRunner struct{}
+
+func (ExecRunner) Run(ctx context.Context, args []string, input io.Reader, env []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "bw", append(append([]string(nil), args...), "--nointeraction")...)
+	// Never inherit another account's session or login credentials.
+	for _, item := range os.Environ() {
+		key, _, _ := strings.Cut(item, "=")
+		switch key {
+		case "BW_SESSION", "BW_PASSWORD", "BW_CLIENTID", "BW_CLIENTSECRET", "LAZYPASS_BW_PASSWORD", "BITWARDENCLI_APPDATA_DIR":
+			continue
+		}
+		cmd.Env = append(cmd.Env, item)
+	}
+	cmd.Env = append(cmd.Env, env...)
+	cmd.Stdin = input
+	return cmd.Output()
+}
+
+type Prompt func() (string, error)
+
+type Provider struct {
+	DataDir  string
+	Server   string
+	Prompt   Prompt
+	Runner   Runner
+	mu       sync.Mutex
+	session  string
+	metadata *snapshot
+}
+
+func New(dataDir, server string, prompt Prompt, runner Runner) *Provider {
+	if server == "" {
+		server = DefaultServer
+	}
+	if runner == nil {
+		runner = ExecRunner{}
+	}
+	return &Provider{DataDir: dataDir, Server: strings.TrimRight(server, "/"), Prompt: prompt, Runner: runner}
+}
+
+func (p *Provider) Name() string           { return "bitwarden" }
+func (p *Provider) StoreDirectory() string { return p.DataDir }
+func (p *Provider) Capabilities() vault.Capabilities {
+	return vault.Capabilities{Sync: true, Delete: true}
+}
+func (p *Provider) Lock() { p.mu.Lock(); defer p.mu.Unlock(); p.session = ""; p.metadata = nil }
+
+func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extra ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	env := []string{"BITWARDENCLI_APPDATA_DIR=" + p.DataDir, "BW_NOINTERACTION=true"}
+	if p.session != "" {
+		env = append(env, "BW_SESSION="+p.session)
+	}
+	env = append(env, extra...)
+	output, err := p.Runner.Run(ctx, args, input, env)
+	if err != nil {
+		cause := debug.Unavailable
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			cause = debug.Timeout
+		}
+		debug.Failure("bitwarden command", cause)
+		return nil, vault.ErrUnavailable
+	}
+	return output, nil
+}
+
+type status struct {
+	Status    string `json:"status"`
+	ServerURL string `json:"serverUrl"`
+}
+
+func (p *Provider) status(ctx context.Context) (status, error) {
+	var result status
+	output, err := p.run(ctx, []string{"status"}, nil)
+	if err != nil {
+		return result, err
+	}
+	if json.Unmarshal(output, &result) != nil {
+		return result, vault.ErrMalformed
+	}
+	server := strings.TrimRight(result.ServerURL, "/")
+	if server == "" {
+		server = DefaultServer
+	}
+	if server != p.Server {
+		return result, vault.ErrConflict
+	}
+	return result, nil
+}
+
+func (p *Provider) Status(ctx context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, err := p.status(ctx)
+	if err != nil {
+		return err
+	}
+	if s.Status == "unauthenticated" {
+		return vault.ErrUninitialized
+	}
+	if s.Status != "locked" && s.Status != "unlocked" {
+		return vault.ErrMalformed
+	}
+	return nil
+}
+
+func (p *Provider) ensureUnlocked(ctx context.Context) error {
+	if p.session != "" {
+		return nil
+	}
+	s, err := p.status(ctx)
+	if err != nil {
+		return err
+	}
+	if s.Status == "unauthenticated" {
+		return vault.ErrUninitialized
+	}
+	if p.session != "" && s.Status == "unlocked" {
+		return nil
+	}
+	p.session = ""
+	if vault.IsNoninteractive(ctx) {
+		return vault.ErrPromptRequired
+	}
+	if p.Prompt == nil {
+		return vault.ErrLocked
+	}
+	password, err := p.Prompt()
+	if err != nil {
+		return vault.ErrLocked
+	}
+	output, err := p.run(ctx, []string{"unlock", "--passwordenv", "LAZYPASS_BW_PASSWORD", "--raw"}, nil, "LAZYPASS_BW_PASSWORD="+password)
+	if err != nil {
+		return vault.ErrLocked
+	}
+	session := strings.TrimSpace(string(output))
+	if session == "" || strings.ContainsAny(session, "\r\n\x00") {
+		return vault.ErrLocked
+	}
+	p.session = session
+	return nil
+}
+
+func (p *Provider) Initialize(ctx context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := os.MkdirAll(p.DataDir, 0700); err != nil {
+		return vault.ErrUnavailable
+	}
+	output, err := p.run(ctx, []string{"status"}, nil)
+	if err != nil {
+		return err
+	}
+	var s status
+	if json.Unmarshal(output, &s) != nil {
+		return vault.ErrMalformed
+	}
+	if s.Status != "unauthenticated" {
+		return vault.ErrConflict
+	}
+	_, err = p.run(ctx, []string{"config", "server", p.Server}, nil)
+	return err
+}
+
+func (p *Provider) Sync(ctx context.Context) (vault.SyncResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	defer func() { p.metadata = nil }()
+	if err := p.ensureUnlocked(ctx); err != nil {
+		return vault.SyncResult{}, err
+	}
+	_, err := p.run(ctx, []string{"sync"}, nil)
+	return vault.SyncResult{Pulled: err == nil}, err
+}
+
+func decode[T any](output []byte, err error) (T, error) {
+	var result T
+	if err != nil {
+		return result, err
+	}
+	if json.Unmarshal(bytes.TrimSpace(output), &result) != nil {
+		return result, vault.ErrMalformed
+	}
+	return result, nil
+}

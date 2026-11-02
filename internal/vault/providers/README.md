@@ -25,6 +25,14 @@ Each named vault retains its own provider instance and browser view. Switching
 changes the active Store form's service; quitting cancels all views' searches
 and invokes every available Locker. Clipboard remains a service callback.
 
+The root TUI supplies a provider-independent OperationRunner. Provider I/O runs
+off the event loop with noninteractive context; only an explicit prompt-required
+response retries with terminal ownership. Completion callbacks run on the UI
+thread. Implementations must honor context cancellation and never mutate UI
+state from work callbacks. Forms suppress duplicate submissions and discard
+stale suggestion completions. New providers inherit this behavior without name
+checks or provider-specific scheduling.
+
 Provider tests should cover exact-value preservation, duplicate creates,
 metadata-only listing, missing/uninitialized stores, cancellation, invalid paths,
 and optional operations. Crypto/backends should return classified errors rather

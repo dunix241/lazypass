@@ -58,6 +58,7 @@ Choose a provider to get started:
 
 - [age](docs/providers/age.md): built-in encryption with a passphrase-protected identity.
 - [pass](docs/providers/pass.md): use the Unix password manager and your GPG keys.
+- [Bitwarden / Vaultwarden](docs/providers/bitwarden.md): connect with the official Bitwarden CLI.
 
 You can keep multiple named vaults and switch between them in the app. For CLI
 commands, select one with `--vault <name>`:

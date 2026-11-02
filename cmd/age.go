@@ -49,8 +49,11 @@ func runVaultInit(cmd *cobra.Command, _ []string) error {
 	if provider == "pass" {
 		return initPassVault(cmd, cfg, path)
 	}
+	if provider == "bitwarden" {
+		return initBitwardenVault(cmd, cfg, path, name)
+	}
 	if provider != "age" {
-		return usage(fmt.Errorf("unsupported vault provider: use age or pass"))
+		return usage(fmt.Errorf("unsupported vault provider: use age, pass, or bitwarden"))
 	}
 	entry := config.Vault{Name: name, Provider: "age"}
 	if value := mustString(cmd, "store-dir"); value != "" {

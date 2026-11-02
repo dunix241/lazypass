@@ -6,6 +6,12 @@ import (
 )
 
 func (s *View) HandleKey(event *tcell.EventKey) {
+	if s.loading {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'p' && s.deps.OpenPicker != nil {
+			s.deps.OpenPicker()
+		}
+		return
+	}
 	if s.IsConfirmingDelete() {
 		s.handleDeleteKey(event)
 		return

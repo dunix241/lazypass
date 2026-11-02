@@ -84,6 +84,7 @@ func init() {
 	initVault := &cobra.Command{Use: "init", Short: "Initialize an encrypted vault", Args: cobra.NoArgs, RunE: runVaultInit}
 	initVault.Flags().String("provider", "age", "vault provider")
 	initVault.Flags().String("name", "", "name for the new vault (defaults to provider)")
+	initVault.Flags().String("server", "", "Bitwarden or Vaultwarden server URL")
 	initVault.Flags().String("store-dir", "", "age store directory")
 	initVault.Flags().String("identity-file", "", "encrypted age identity file outside the store")
 	initVault.Flags().String("recipient", "", "GPG recipient for pass, or existing X25519 public recipient for age")
@@ -505,7 +506,7 @@ func providerFor(entry config.Vault) (providers.Managed, bool) {
 }
 
 func openProvider(entry config.Vault) (providers.Managed, error) {
-	return providers.Builtins().Open(entry, func() (string, error) { return terminalPassphrase("Age identity passphrase: ") })
+	return providers.Builtins().Open(entry, func() (string, error) { return terminalPassphrase("Vault passphrase: ") })
 }
 
 func optionalArg(args []string) string {

@@ -28,6 +28,8 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
+	running          bool
+	operationContext context.Context
 	*tview.Box
 	cfg                 config.Config
 	cfgPath             string
