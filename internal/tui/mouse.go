@@ -9,6 +9,9 @@ import (
 
 func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(tview.Primitive)) (bool, tview.Primitive) {
 	return s.WrapMouseHandler(func(action tview.MouseAction, event *tcell.EventMouse, _ func(tview.Primitive)) (bool, tview.Primitive) {
+		if s.unlock != nil {
+			return true, s
+		}
 		if s.overlay == vaultPickerOverlay {
 			return true, s
 		}

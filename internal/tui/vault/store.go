@@ -18,6 +18,13 @@ type StoreDependencies struct {
 }
 
 type StoreForm struct {
+	entryType            vault.EntryType
+	choosingType         bool
+	extraFields          map[string]string
+	extraValue           string
+	loadingEntries       bool
+	loadingEntry         bool
+	cancelSuggestions    context.CancelFunc
 	saving               bool
 	open                 bool
 	storePath            string
@@ -28,6 +35,10 @@ type StoreForm struct {
 	manual               bool
 	editingValue         bool
 	value                string
+	username             string
+	url                  string
+	notes                string
+	field                int
 	editEntry            *vault.Entry
 	suggestions          map[string][]vault.Node
 	suggestionGeneration uint64
@@ -66,6 +77,9 @@ func (s *StoreForm) Open() bool {
 		s.notify(shared.Warning, "Vault unavailable")
 		return false
 	}
+	if s.cancelSuggestions != nil {
+		s.cancelSuggestions()
+	}
 	*s = StoreForm{deps: s.deps, open: true, suggestions: make(map[string][]vault.Node), suggestionPending: make(map[string]bool), suggestionGeneration: s.suggestionGeneration + 1}
 	s.refreshStoreSuggestions()
 	return true
@@ -76,6 +90,7 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 		return false
 	}
 	s.manual = true
+	s.choosingType = len(s.deps.Service.SupportedEntryTypes()) > 1
 	if len(parent) > 0 {
 		s.storePath = parent.String() + "/"
 		s.refreshStoreSuggestions()
@@ -83,6 +98,9 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 	return true
 }
 func (s *StoreForm) Close() {
+	if s.cancelSuggestions != nil {
+		s.cancelSuggestions()
+	}
 	*s = StoreForm{deps: s.deps, suggestionGeneration: s.suggestionGeneration + 1}
 	if s.deps.Closed != nil {
 		s.deps.Closed()
@@ -90,7 +108,7 @@ func (s *StoreForm) Close() {
 }
 
 func (s *StoreForm) OpenEdit(path vault.Path) bool {
-	*s = StoreForm{deps: s.deps, open: true, manual: true, editingValue: true, saving: true, storePath: path.String(), suggestionGeneration: s.suggestionGeneration + 1}
+	*s = StoreForm{deps: s.deps, open: true, manual: true, editingValue: true, loadingEntry: true, storePath: path.String(), suggestionGeneration: s.suggestionGeneration + 1}
 	var entry vault.Entry
 	provider := s.deps.Service
 	s.run(func(ctx context.Context) error {
@@ -98,6 +116,7 @@ func (s *StoreForm) OpenEdit(path vault.Path) bool {
 		entry, err = provider.Show(ctx, path)
 		return err
 	}, func(err error) {
+		s.loadingEntry = false
 		if err != nil {
 			s.notify(shared.Error, copyErrorMessage(err))
 			s.Close()
@@ -105,6 +124,13 @@ func (s *StoreForm) OpenEdit(path vault.Path) bool {
 		}
 		s.storePath = path.String()
 		s.value = entry.Password
+		s.username, s.url, s.notes = entry.Username, entry.URL, entry.Notes
+		s.entryType = entry.Type
+		s.extraFields = make(map[string]string, len(entry.Fields))
+		for key, value := range entry.Fields {
+			s.extraFields[key] = value
+		}
+		s.extraValue = s.extraFields[s.entryFields()[0].key]
 		entry.Password = ""
 		entry.Path = append(vault.Path(nil), path...)
 		s.editEntry = &entry

@@ -42,9 +42,11 @@ func expand(path string) string {
 	}
 	return path
 }
-func (p *Provider) Name() string                     { return "age" }
-func (p *Provider) StoreDirectory() string           { return p.StoreDir }
-func (p *Provider) Capabilities() vault.Capabilities { return vault.Capabilities{Delete: true} }
+func (p *Provider) Name() string                           { return "age" }
+func (p *Provider) SupportedEntryTypes() []vault.EntryType { return vault.AllEntryTypes() }
+func (p *Provider) UsesPassphrasePrompt()                  {}
+func (p *Provider) StoreDirectory() string                 { return p.StoreDir }
+func (p *Provider) Capabilities() vault.Capabilities       { return vault.Capabilities{Delete: true} }
 func (p *Provider) Sync(context.Context) (vault.SyncResult, error) {
 	return vault.SyncResult{}, vault.ErrUnsupported
 }
@@ -201,10 +203,7 @@ func (p *Provider) unlock(ctx context.Context) ([]agecrypto.Identity, error) {
 	if vault.IsNoninteractive(ctx) {
 		return nil, vault.ErrPromptRequired
 	}
-	if p.Prompt == nil {
-		return nil, vault.ErrLocked
-	}
-	passphrase, err := p.Prompt()
+	passphrase, err := vault.RequestPassphrase(ctx, p.Prompt)
 	if err != nil {
 		return nil, vault.ErrLocked
 	}

@@ -31,6 +31,7 @@ func TestStoreFormCancelFailureAndSuccess(t *testing.T) {
 	}
 	p.err = nil
 	storeKey(s, tcell.KeyEnter, 0)
+	storeKey(s, tcell.KeyEnter, 0)
 	if p.store.Path.String() != "folder/name" || p.store.Password != "generated" || s.IsOpen() || s.storePath != "" || len(s.storeNodes) != 0 {
 		t.Fatal("success/cleanup failed")
 	}

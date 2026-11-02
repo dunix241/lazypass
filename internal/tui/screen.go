@@ -28,6 +28,7 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
+	unlock           *unlockPrompt
 	running          bool
 	operationContext context.Context
 	*tview.Box
@@ -86,6 +87,9 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.store.Draw(screen, frame)
 	case vaultPickerOverlay:
 		s.drawVaultPicker(screen, frame)
+	}
+	if s.unlock != nil {
+		s.drawUnlock(screen, frame)
 	}
 }
 

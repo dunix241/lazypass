@@ -24,6 +24,9 @@ func TestAddRejectsOnlyExistingEntry(t *testing.T) {
 		s.Open()
 		s.storePath = "hello"
 		storeKey(s, tcell.KeyEnter, 0)
+		if kind == vault.FolderNode {
+			storeKey(s, tcell.KeyEnter, 0)
+		}
 		if kind == vault.EntryNode && (!s.IsOpen() || p.store.Password != "") {
 			t.Fatal("Generator Add overwrote value")
 		}

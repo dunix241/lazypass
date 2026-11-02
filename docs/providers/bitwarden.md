@@ -31,8 +31,8 @@ Don't point two accounts at the same `storeDir`.
 
 ## Supported entries
 
-Personal login items are supported. Organization items, secure notes, cards,
-and identities are excluded from this first version. Listing requires unlocking
+Personal logins, cards, identities, secure notes, and SSH keys are supported.
+Organization items are excluded. Listing requires unlocking
 because Bitwarden encrypts entry names too.
 
 Folder names containing `/` appear as nested folders in lazypass. Editing a

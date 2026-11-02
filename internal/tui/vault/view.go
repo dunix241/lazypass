@@ -16,13 +16,13 @@ type Dependencies struct {
 	OpenThemes   func()
 	OpenAdd      func()
 	OpenEdit     func(vault.Path)
-	OpenPicker   func()
 	Dispatch     func(context.Context, func())
 }
 
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	refreshing       bool
 	deleting         bool
 	loading          bool
 	copying          bool

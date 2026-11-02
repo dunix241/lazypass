@@ -23,6 +23,7 @@ func TestStoreActionOpensStoreForm(t *testing.T) {
 		key(tcell.KeyRune, r)
 	}
 	key(tcell.KeyEnter, 0)
+	key(tcell.KeyEnter, 0)
 	if a.screen.store.IsOpen() || p.store.Path.String() != "folder/name" || p.store.Password != a.CurrentPassword() {
 		t.Fatal("cross-view password/destination wiring failed")
 	}

@@ -152,7 +152,7 @@ def drain(delay):
   if ready: os.read(master,65536)
 drain(.5)
 for key in sys.argv[3].split("|"):
- os.write(master,key.encode());drain(.3)
+ os.write(master,key.encode());drain(.7)
 p.wait(timeout=10)
 assert p.returncode==0,p.returncode
 assert termios.tcgetattr(slave)==before,"terminal modes not restored"

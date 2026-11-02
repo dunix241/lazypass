@@ -16,6 +16,7 @@ func (s *StoreForm) refreshStoreSuggestions() {
 		return
 	}
 	nodes, cached := s.suggestions[path.String()]
+	s.loadingEntries = !cached
 	if !cached {
 		key := path.String()
 		if s.suggestionPending == nil {
@@ -27,20 +28,35 @@ func (s *StoreForm) refreshStoreSuggestions() {
 		s.suggestionPending[key] = true
 		generation := s.suggestionGeneration
 		provider := s.deps.Service
+		if s.cancelSuggestions != nil {
+			s.cancelSuggestions()
+		}
+		request, cancel := context.WithCancel(context.Background())
+		s.cancelSuggestions = cancel
 		s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
+			if request.Err() != nil {
+				return request.Err()
+			}
+			ctx, stop := context.WithCancel(ctx)
+			defer stop()
+			detach := context.AfterFunc(request, stop)
+			defer detach()
 			var err error
 			nodes, err = provider.List(ctx, path)
 			return err
 		}, func(err error) {
+			defer cancel()
+			if request.Err() != nil {
+				return
+			}
 			if generation != s.suggestionGeneration || !s.open {
 				return
 			}
 			delete(s.suggestionPending, key)
+			s.loadingEntries = false
 			if err != nil && !errors.Is(err, vault.ErrNotFound) {
-				if !errors.Is(err, vault.ErrNotFound) {
-					debug.Failure("vault suggestions", vaultFailureCause(err))
-					s.storeMessage = "Items cannot be loaded. Type a destination instead."
-				}
+				debug.Failure("vault suggestions", vaultFailureCause(err))
+				s.storeMessage = "Items cannot be loaded. Type a destination instead."
 				return
 			}
 			if s.suggestions == nil {

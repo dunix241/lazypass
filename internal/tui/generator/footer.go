@@ -11,8 +11,8 @@ func (s *View) Footer(width int) string {
 		contextHint = "<space> toggle"
 	}
 	bases := []string{
-		"<tab> focus  •  a add  •  r regenerate  •  c copy  •  t themes  •  v view  •  q quit",
-		"a add  •  c copy  •  t themes  •  v view  •  q quit",
+		"<tab> focus  •  a add  •  r regenerate  •  c copy  •  V vault  •  t themes  •  v view  •  q quit",
+		"a add  •  c copy  •  V vault  •  t themes  •  v view  •  q quit",
 		"a add  •  v view  •  q quit", "q quit",
 	}
 	if contextHint == "" {

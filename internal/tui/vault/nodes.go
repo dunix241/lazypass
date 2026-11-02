@@ -25,19 +25,34 @@ func (s *View) vaultDisplayNodes() []vault.Node {
 	return append(display, nodes...)
 }
 func nodeLabel(node vault.Node, nerdFont bool) string {
-	icon := ""
-	if nerdFont {
-		if node.Kind == vault.FolderNode {
-			icon = " "
-		} else {
-			icon = "󰦝 "
-		}
-	}
 	name := node.Name
 	if node.Kind == vault.FolderNode {
-		name += "/"
+		if nerdFont {
+			return " " + name + "/"
+		}
+		return name + "/"
 	}
-	return icon + name
+	if !node.TypeKnown {
+		if nerdFont {
+			return "󰦝 " + name
+		}
+		return name
+	}
+	if !nerdFont {
+		return "[" + node.EntryType.String() + "] " + name
+	}
+	icon := ""
+	switch node.EntryType {
+	case vault.CardEntry:
+		icon = "󰿯"
+	case vault.IdentityEntry:
+		icon = ""
+	case vault.NoteEntry:
+		icon = "󰎞"
+	case vault.SSHKeyEntry:
+		icon = "󰌆"
+	}
+	return icon + " " + name
 }
 func nodeColor(node vault.Node, colors shared.Palette) tcell.Color {
 	if node.Kind == vault.FolderNode {

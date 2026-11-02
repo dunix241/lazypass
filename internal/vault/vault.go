@@ -23,6 +23,25 @@ var (
 
 type noninteractiveKey struct{}
 
+type passphrasePromptKey struct{}
+type PassphrasePrompt func(context.Context) (string, error)
+
+func WithPassphrasePrompt(ctx context.Context, prompt PassphrasePrompt) context.Context {
+	return context.WithValue(ctx, passphrasePromptKey{}, prompt)
+}
+
+func RequestPassphrase(ctx context.Context, fallback func() (string, error)) (string, error) {
+	if prompt, ok := ctx.Value(passphrasePromptKey{}).(PassphrasePrompt); ok {
+		return prompt(ctx)
+	}
+	if fallback == nil {
+		return "", ErrLocked
+	}
+	return fallback()
+}
+
+type PassphraseProvider interface{ UsesPassphrasePrompt() }
+
 // WithoutPrompt lets transports try cached credentials without taking the TTY.
 func WithoutPrompt(ctx context.Context) context.Context {
 	return context.WithValue(ctx, noninteractiveKey{}, true)
@@ -70,12 +89,15 @@ const (
 )
 
 type Node struct {
-	Path Path
-	Name string
-	Kind NodeKind
+	EntryType EntryType
+	TypeKnown bool
+	Path      Path
+	Name      string
+	Kind      NodeKind
 }
 
 type Entry struct {
+	Type     EntryType
 	Path     Path
 	Password string
 	Username string
@@ -84,9 +106,40 @@ type Entry struct {
 	Fields   map[string]string
 }
 
+type EntryType uint8
+
+func AllEntryTypes() []EntryType {
+	return []EntryType{LoginEntry, CardEntry, IdentityEntry, NoteEntry, SSHKeyEntry}
+}
+
+const (
+	LoginEntry EntryType = iota
+	CardEntry
+	IdentityEntry
+	NoteEntry
+	SSHKeyEntry
+)
+
+func (t EntryType) String() string {
+	switch t {
+	case CardEntry:
+		return "Card"
+	case IdentityEntry:
+		return "Identity"
+	case NoteEntry:
+		return "Note"
+	case SSHKeyEntry:
+		return "SSH key"
+	default:
+		return "Login"
+	}
+}
+
 type Capabilities struct {
 	Sync, Delete bool
 }
+
+type EntryTypes interface{ SupportedEntryTypes() []EntryType }
 
 type SyncResult struct {
 	Pulled bool

@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"lazypass/internal/vault"
 )
@@ -11,6 +12,7 @@ import (
 var ErrClipboard = errors.New("clipboard unavailable")
 
 type Service struct {
+	Types    *TypeCache
 	Provider vault.Provider
 	Copy     func(string) error
 }
@@ -27,7 +29,11 @@ func (s Service) List(ctx context.Context, path vault.Path) ([]vault.Node, error
 	if err != nil {
 		return nil, err
 	}
-	return p.List(ctx, path)
+	nodes, err := p.List(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return s.Types.decorate(nodes), nil
 }
 
 func (s Service) Show(ctx context.Context, path vault.Path) (vault.Entry, error) {
@@ -35,15 +41,29 @@ func (s Service) Show(ctx context.Context, path vault.Path) (vault.Entry, error)
 	if err != nil {
 		return vault.Entry{}, err
 	}
-	return p.Read(ctx, path)
+	entry, err := p.Read(ctx, path)
+	if err == nil {
+		s.Types.remember(entry)
+	} else if errors.Is(err, vault.ErrNotFound) {
+		s.Types.forget(vault.Node{Path: path, Kind: vault.EntryNode})
+	}
+	return entry, err
 }
 
 func (s Service) Store(ctx context.Context, entry vault.Entry) error {
+	entry, err := vault.PrepareEntry(entry)
+	if err != nil {
+		return err
+	}
 	p, err := s.provider()
 	if err != nil {
 		return err
 	}
-	return p.Write(ctx, entry)
+	if err := p.Write(ctx, entry); err != nil {
+		return err
+	}
+	s.Types.remember(entry)
+	return nil
 }
 
 // CheckNewPath prevents replacing an entry at the exact destination.
@@ -71,14 +91,32 @@ func (s Service) CheckNewPath(ctx context.Context, path vault.Path) error {
 }
 
 func (s Service) Create(ctx context.Context, entry vault.Entry) error {
+	if !slices.Contains(s.SupportedEntryTypes(), entry.Type) {
+		return vault.ErrUnsupported
+	}
+	entry, err := vault.PrepareEntry(entry)
+	if err != nil {
+		return err
+	}
 	p, err := s.provider()
 	if err != nil {
 		return err
 	}
 	if creator, ok := p.(vault.EntryCreator); ok {
-		return creator.Create(ctx, entry)
+		if err := creator.Create(ctx, entry); err != nil {
+			return err
+		}
+		s.Types.remember(entry)
+		return nil
 	}
 	return vault.ErrUnsupported
+}
+
+func (s Service) SupportedEntryTypes() []vault.EntryType {
+	if provider, ok := s.Provider.(vault.EntryTypes); ok {
+		return provider.SupportedEntryTypes()
+	}
+	return []vault.EntryType{vault.LoginEntry}
 }
 
 func (s Service) CreateFolder(ctx context.Context, path vault.Path) error {
@@ -118,12 +156,20 @@ func (s Service) Delete(ctx context.Context, node vault.Node) error {
 		if !ok {
 			return vault.ErrUnsupported
 		}
-		return deleter.DeleteFolder(ctx, node.Path)
+		if err := deleter.DeleteFolder(ctx, node.Path); err != nil {
+			return err
+		}
+		s.Types.forget(node)
+		return nil
 	}
 	if node.Kind != vault.EntryNode {
 		return vault.ErrInvalidPath
 	}
-	return p.Delete(ctx, node.Path)
+	if err := p.Delete(ctx, node.Path); err != nil {
+		return err
+	}
+	s.Types.forget(node)
+	return nil
 }
 
 func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
@@ -134,7 +180,18 @@ func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
 	if err != nil {
 		return err
 	}
-	if err := s.Copy(entry.Password); err != nil {
+	value := entry.Password
+	switch entry.Type {
+	case vault.CardEntry:
+		value = entry.Fields["number"]
+	case vault.NoteEntry:
+		value = entry.Notes
+	case vault.SSHKeyEntry:
+		value = entry.Fields["privateKey"]
+	case vault.IdentityEntry:
+		return vault.ErrUnsupported
+	}
+	if err := s.Copy(value); err != nil {
 		return ErrClipboard
 	}
 	return nil
@@ -145,5 +202,9 @@ func (s Service) Sync(ctx context.Context) (vault.SyncResult, error) {
 	if err != nil {
 		return vault.SyncResult{}, err
 	}
-	return p.Sync(ctx)
+	result, err := p.Sync(ctx)
+	if err == nil {
+		s.Types.clear()
+	}
+	return result, err
 }

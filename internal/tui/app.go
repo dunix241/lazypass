@@ -56,7 +56,7 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	for _, option := range options {
 		option(s)
 	}
-	app := tview.NewApplication().EnableMouse(true)
+	app := tview.NewApplication().EnableMouse(true).EnablePaste(true)
 	s.quit, s.suspend = app.Stop, app.Suspend
 	s.dispatch = func(ctx context.Context, fn func()) {
 		if ctx.Err() == nil {
@@ -76,6 +76,11 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	})
 	if len(s.vaults) == 0 {
 		s.vaults = []NamedVault{{Service: s.vaultService}}
+	}
+	for i := range s.vaults {
+		if s.vaults[i].Service.Types == nil {
+			s.vaults[i].Service.Types = &service.TypeCache{}
+		}
 	}
 	s.vaultViews = make([]*vaultui.View, len(s.vaults))
 	initialVault := 0

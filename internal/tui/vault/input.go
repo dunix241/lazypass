@@ -7,9 +7,6 @@ import (
 
 func (s *View) HandleKey(event *tcell.EventKey) {
 	if s.loading {
-		if event.Key() == tcell.KeyRune && event.Rune() == 'p' && s.deps.OpenPicker != nil {
-			s.deps.OpenPicker()
-		}
 		return
 	}
 	if s.IsConfirmingDelete() {
@@ -31,10 +28,8 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		s.openVaultNode()
 	case tcell.KeyRune:
 		switch event.Rune() {
-		case 'p':
-			if s.deps.OpenPicker != nil {
-				s.deps.OpenPicker()
-			}
+		case 'r':
+			s.refreshProvider()
 		case 'e':
 			node, ok := s.selectedVaultNode()
 			if ok && node.Kind == vault.EntryNode && s.deps.OpenEdit != nil {

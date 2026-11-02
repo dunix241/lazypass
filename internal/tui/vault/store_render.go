@@ -16,17 +16,55 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.manual {
 		title = " Add to vault "
 	}
-	if s.editEntry != nil {
+	if s.loadingEntry || s.editEntry != nil {
 		title = " Edit entry "
 	}
 	shared.PrintAt(screen, r.X+2, r.Y, title, colors.Accent)
+	if s.loadingEntry {
+		shared.PrintAt(screen, r.X+2, r.Y+3, "Loading entry…", colors.Muted)
+		return
+	}
+	if s.choosingType {
+		for i, kind := range s.deps.Service.SupportedEntryTypes() {
+			color := colors.Text
+			prefix := "  "
+			if kind == s.entryType {
+				color = colors.Focus
+				prefix = "> "
+			}
+			shared.PrintAt(screen, r.X+2, r.Y+2+i, prefix+kind.String(), color)
+		}
+		shared.PrintPanelFooter(screen, r, "↑/↓ select", colors.Muted)
+		return
+	}
+	if s.loadingEntries {
+		shared.PrintAt(screen, r.X+2, r.Y+3, "Loading entries…", colors.Muted)
+		return
+	}
 	if s.editingValue {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Entry: "+s.storePath, r.W-4), colors.Muted)
-		shared.PrintAt(screen, r.X+2, r.Y+3, "Value (hidden):", colors.Text)
-		shared.PrintAt(screen, r.X+2, r.Y+4, strings.Repeat("*", min(utf8.RuneCountInString(s.value), max(0, r.W-5)))+"_", colors.Focus)
-		if s.editEntry == nil {
-			shared.PrintPanelFooter(screen, r, "<shift-tab> path", colors.Muted)
+		fields := s.entryFields()
+		rows := min(len(fields), max(1, r.H-6))
+		start := max(0, s.field-rows+1)
+		for row := 0; row < rows; row++ {
+			i := start + row
+			field := fields[i]
+			color := colors.Text
+			value := strings.ReplaceAll(s.displayField(i), "\n", " ↵ ")
+			if field.secret {
+				value = strings.Repeat("*", min(utf8.RuneCountInString(value), max(0, r.W-18)))
+			}
+			if i == s.field {
+				color = colors.Focus
+				value += "_"
+			}
+			shared.PrintAt(screen, r.X+2, r.Y+4+row, shared.Truncate(field.label+": "+value, r.W-4), color)
 		}
+		hint := "<tab> field"
+		if fields[s.field].multiline {
+			hint += "  •  <ctrl-n> newline"
+		}
+		shared.PrintPanelFooter(screen, r, shared.FitHints(r.W-4, hint, "<tab> field"), colors.Muted)
 		return
 	}
 	shared.PrintAt(screen, r.X+2, r.Y+2, "Destination (folder/name):", colors.Muted)
@@ -55,6 +93,14 @@ func storeFormHelp(width int) string {
 func (s *StoreForm) storeFormRect(viewport shared.Rect) (shared.Rect, int) {
 	w := min(52, viewport.W-4)
 	maxHeight := viewport.H - 4
+	if s.choosingType {
+		h := min(10, maxHeight)
+		return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + (viewport.H-h)/2, W: w, H: h}, 0
+	}
+	if s.editingValue {
+		h := min(11, maxHeight)
+		return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + (viewport.H-h)/2, W: w, H: h}, 0
+	}
 	visible := min(5, min(max(0, maxHeight-8), len(s.storeNodes)))
 	return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + max(2, (viewport.H-(8+visible))/2), W: w, H: 8 + visible}, visible
 }

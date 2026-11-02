@@ -7,6 +7,10 @@ import (
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return s.WrapInputHandler(func(event *tcell.EventKey, _ func(tview.Primitive)) {
+		if s.unlock != nil {
+			s.handleUnlock(event)
+			return
+		}
 		if s.overlay == vaultPickerOverlay {
 			s.handleVaultPicker(event)
 			return
@@ -30,6 +34,10 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'v' {
 			s.switchRoute()
+			return
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'V' {
+			s.openVaultPicker()
 			return
 		}
 		if s.route == VaultRoute {

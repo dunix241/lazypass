@@ -7,8 +7,10 @@ func (s *View) Footer(width int) string {
 		return shared.FitFooter(width, "y yes  •  n no", "y/n")
 	}
 	return shared.FitFooter(width,
-		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  / search  •  p pick  •  t themes  •  v view  •  q quit",
-		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  p pick  •  t themes  •  v view  •  q quit",
+		"a add  •  e edit  •  d delete  •  r refresh  •  h back  •  l open/copy  •  / search  •  V vault  •  t themes  •  v view  •  q quit",
+		"a add  •  e edit  •  d delete  •  r refresh  •  h back  •  l open/copy  •  V vault  •  t themes  •  v view  •  q quit",
+		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  / search  •  V vault  •  t themes  •  v view  •  q quit",
+		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  V vault  •  t themes  •  v view  •  q quit",
 		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  / filter  •  t themes  •  v view  •  q quit",
 		"a add  •  e edit  •  d delete  •  h back  •  l open/copy  •  v view  •  q quit",
 		"h back  •  l open/copy  •  / filter  •  v view  •  q quit",

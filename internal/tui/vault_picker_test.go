@@ -71,9 +71,9 @@ func TestVaultPickerPreservesFolderStateAndRoutesWrites(t *testing.T) {
 	}
 	key := func(k tcell.Key, r rune) { a.screen.InputHandler()(tcell.NewEventKey(k, r, tcell.ModNone), nil) }
 	key(tcell.KeyEnter, 0)
-	key(tcell.KeyRune, 'p')
+	key(tcell.KeyRune, 'V')
 	if a.screen.overlay != vaultPickerOverlay {
-		t.Fatal("p did not open picker")
+		t.Fatal("V did not open picker")
 	}
 	key(tcell.KeyDown, 0)
 	key(tcell.KeyEnter, 0)
@@ -92,10 +92,18 @@ func TestVaultPickerPreservesFolderStateAndRoutesWrites(t *testing.T) {
 	if bProvider.store.Password != "fixture" || aProvider.store.Password != "" {
 		t.Fatal("write routed to wrong vault")
 	}
-	key(tcell.KeyRune, 'p')
+	key(tcell.KeyRune, 'V')
 	key(tcell.KeyUp, 0)
 	key(tcell.KeyEnter, 0)
 	if a.screen.vault.CurrentPath().String() != "folder" {
 		t.Fatal("folder state lost on switch")
+	}
+}
+
+func TestVaultPickerShortcutFromGenerator(t *testing.T) {
+	a := NewApp(config.Defaults(), "", nil, WithVaults([]NamedVault{{Name: "test", Service: service.Service{Provider: &memoryVault{}}}}))
+	a.screen.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'V', tcell.ModShift), nil)
+	if a.screen.overlay != vaultPickerOverlay || a.CurrentRoute() != GeneratorRoute {
+		t.Fatal("V did not open picker while preserving generator route")
 	}
 }

@@ -37,6 +37,10 @@ type snapshot struct {
 	excluded []item
 }
 
+func (p *Provider) SupportedEntryTypes() []vault.EntryType {
+	return vault.AllEntryTypes()
+}
+
 func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 	if ctx.Err() != nil {
 		return snapshot{}, vault.ErrUnavailable
@@ -62,7 +66,7 @@ func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 		entry.Login.Username = ""
 		entry.Login.URIs = nil
 		entry.Notes = ""
-		if entry.Type == 1 && entry.OrganizationID == "" && entry.DeletedDate == nil {
+		if entry.Type >= 1 && entry.Type <= 5 && entry.OrganizationID == "" && entry.DeletedDate == nil {
 			result.items = append(result.items, entry)
 		} else if entry.DeletedDate == nil {
 			result.excluded = append(result.excluded, entry)
@@ -165,7 +169,7 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 			continue
 		}
 		if len(candidate) == len(path)+1 && strings.HasPrefix(candidate.String(), prefix) {
-			nodes = append(nodes, vault.Node{Path: candidate, Name: entry.Name, Kind: vault.EntryNode})
+			nodes = append(nodes, vault.Node{Path: candidate, Name: entry.Name, Kind: vault.EntryNode, EntryType: entryType(entry.Type), TypeKnown: true})
 		}
 	}
 	// Duplicate names remain visible; operations reject ambiguity rather than
@@ -201,6 +205,24 @@ func (p *Provider) Read(ctx context.Context, path vault.Path) (vault.Entry, erro
 		return vault.Entry{}, err
 	}
 	result := vault.Entry{Path: append(vault.Path(nil), path...), Password: entry.Login.Password, Username: entry.Login.Username, Notes: entry.Notes}
+	result.Type = entryType(entry.Type)
+	if result.Type != vault.LoginEntry {
+		raw, err := decode[map[string]json.RawMessage](p.run(ctx, []string{"get", "item", entry.ID}, nil))
+		if err != nil {
+			return vault.Entry{}, err
+		}
+		var values map[string]json.RawMessage
+		if json.Unmarshal(raw[typeObject(result.Type)], &values) != nil {
+			return vault.Entry{}, vault.ErrMalformed
+		}
+		result.Fields = map[string]string{}
+		for key, value := range values {
+			var text string
+			if json.Unmarshal(value, &text) == nil {
+				result.Fields[key] = text
+			}
+		}
+	}
 	if len(entry.Login.URIs) > 0 {
 		result.URL = entry.Login.URIs[0].URI
 	}
@@ -263,7 +285,15 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 	if err != nil {
 		return err
 	}
-	_, err = p.submit(ctx, []string{"create", "item"}, map[string]any{"type": 1, "name": entry.Path[len(entry.Path)-1], "folderId": id, "notes": entry.Notes, "login": map[string]any{"username": entry.Username, "password": entry.Password, "uris": []map[string]string{{"uri": entry.URL}}}})
+	payload := map[string]any{"type": bitwardenType(entry.Type), "name": entry.Path[len(entry.Path)-1], "folderId": id, "notes": entry.Notes}
+	if entry.Type == vault.LoginEntry {
+		payload["login"] = map[string]any{"username": entry.Username, "password": entry.Password, "uris": []map[string]string{{"uri": entry.URL}}}
+	} else if entry.Type == vault.NoteEntry {
+		payload["secureNote"] = map[string]int{"type": 0}
+	} else {
+		payload[typeObject(entry.Type)] = entry.Fields
+	}
+	_, err = p.submit(ctx, []string{"create", "item"}, payload)
 	return err
 }
 
@@ -288,14 +318,100 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 	if err != nil {
 		return err
 	}
+	if entry.Type != entryType(existing.Type) {
+		return vault.ErrUnsupported
+	}
+	if entry.Type != vault.LoginEntry {
+		if entry.Type != vault.NoteEntry {
+			object := typeObject(entry.Type)
+			values := map[string]json.RawMessage{}
+			if value := raw[object]; len(value) > 0 && string(value) != "null" {
+				if json.Unmarshal(value, &values) != nil {
+					return vault.ErrMalformed
+				}
+			}
+			for key, value := range entry.Fields {
+				values[key], _ = json.Marshal(value)
+			}
+			raw[object], _ = json.Marshal(values)
+		}
+		raw["notes"], _ = json.Marshal(entry.Notes)
+		_, err = p.submit(ctx, []string{"edit", "item", existing.ID}, raw)
+		return err
+	}
 	var login map[string]json.RawMessage
 	if json.Unmarshal(raw["login"], &login) != nil || login == nil {
 		return vault.ErrMalformed
 	}
 	login["password"], _ = json.Marshal(entry.Password)
+	login["username"], _ = json.Marshal(entry.Username)
+	var uris []map[string]json.RawMessage
+	if value, ok := login["uris"]; ok {
+		if err := json.Unmarshal(value, &uris); err != nil {
+			return vault.ErrMalformed
+		}
+	}
+	currentURL := ""
+	if len(uris) > 0 {
+		_ = json.Unmarshal(uris[0]["uri"], &currentURL)
+	}
+	if entry.URL != currentURL {
+		if len(uris) == 0 {
+			uris = append(uris, map[string]json.RawMessage{})
+		}
+		if uris[0] == nil {
+			uris[0] = map[string]json.RawMessage{}
+		}
+		uris[0]["uri"], _ = json.Marshal(entry.URL)
+		login["uris"], _ = json.Marshal(uris)
+	}
+	raw["notes"], _ = json.Marshal(entry.Notes)
 	raw["login"], _ = json.Marshal(login)
 	_, err = p.submit(ctx, []string{"edit", "item", existing.ID}, raw)
 	return err
+}
+
+func entryType(value int) vault.EntryType {
+	switch value {
+	case 2:
+		return vault.NoteEntry
+	case 3:
+		return vault.CardEntry
+	case 4:
+		return vault.IdentityEntry
+	case 5:
+		return vault.SSHKeyEntry
+	default:
+		return vault.LoginEntry
+	}
+}
+func bitwardenType(value vault.EntryType) int {
+	switch value {
+	case vault.NoteEntry:
+		return 2
+	case vault.CardEntry:
+		return 3
+	case vault.IdentityEntry:
+		return 4
+	case vault.SSHKeyEntry:
+		return 5
+	default:
+		return 1
+	}
+}
+func typeObject(value vault.EntryType) string {
+	switch value {
+	case vault.CardEntry:
+		return "card"
+	case vault.IdentityEntry:
+		return "identity"
+	case vault.SSHKeyEntry:
+		return "sshKey"
+	case vault.NoteEntry:
+		return "secureNote"
+	default:
+		return "login"
+	}
 }
 
 func (p *Provider) Delete(ctx context.Context, path vault.Path) error {

@@ -2,9 +2,11 @@ package providers
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"lazypass/internal/config"
+	"lazypass/internal/vault"
 )
 
 func TestNamedAgeDefaultsAreIndependent(t *testing.T) {
@@ -25,6 +27,19 @@ func TestNamedAgeDefaultsAreIndependent(t *testing.T) {
 	store, key, err := AgePaths(custom)
 	if err != nil || store != custom.StoreDir || key != custom.IdentityFile {
 		t.Fatal("explicit paths changed")
+	}
+}
+
+func TestBuiltinsSupportAllEntryTypes(t *testing.T) {
+	for _, name := range []string{"age", "pass", "bitwarden"} {
+		provider, err := Builtins().Open(config.Vault{Name: name, Provider: name, StoreDir: t.TempDir(), IdentityFile: "fixture"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		types, ok := provider.(vault.EntryTypes)
+		if !ok || !slices.Equal(types.SupportedEntryTypes(), vault.AllEntryTypes()) {
+			t.Fatalf("%s does not support all entry types", name)
+		}
 	}
 }
 

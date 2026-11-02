@@ -64,6 +64,7 @@ func New(dataDir, server string, prompt Prompt, runner Runner) *Provider {
 }
 
 func (p *Provider) Name() string           { return "bitwarden" }
+func (p *Provider) UsesPassphrasePrompt()  {}
 func (p *Provider) StoreDirectory() string { return p.DataDir }
 func (p *Provider) Capabilities() vault.Capabilities {
 	return vault.Capabilities{Sync: true, Delete: true}
@@ -148,10 +149,7 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if vault.IsNoninteractive(ctx) {
 		return vault.ErrPromptRequired
 	}
-	if p.Prompt == nil {
-		return vault.ErrLocked
-	}
-	password, err := p.Prompt()
+	password, err := vault.RequestPassphrase(ctx, p.Prompt)
 	if err != nil {
 		return vault.ErrLocked
 	}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"lazypass/internal/tui/shared"
 	vaultui "lazypass/internal/tui/vault"
 	"lazypass/internal/vault"
@@ -19,12 +20,11 @@ func (s *screen) activateVault(index int) {
 			Name:         selected.Name,
 			Service:      selected.Service,
 			RunPrompted:  s.runPrompted,
-			RunOperation: s.operationRunner(),
+			RunOperation: s.operationRunner(selected.Service.Provider),
 			Notify:       s.notify,
 			OpenThemes:   s.openThemePanel,
 			OpenAdd:      s.openVaultAdd,
 			OpenEdit:     s.openVaultEdit,
-			OpenPicker:   s.openVaultPicker,
 			Dispatch:     s.dispatch,
 		})
 	}
@@ -35,7 +35,7 @@ func (s *screen) activateVault(index int) {
 		Notify:       s.notify,
 		Closed:       func() { s.overlay = noOverlay },
 		RunPrompted:  s.runPrompted,
-		RunOperation: s.operationRunner(),
+		RunOperation: s.operationRunner(selected.Service.Provider),
 		Saved: func(vault.Path) {
 			if s.route == VaultRoute {
 				s.vault.Refresh()
@@ -110,6 +110,7 @@ func (s *screen) moveVaultPicker(delta int) {
 }
 
 func (s *screen) closeVaults() {
+	s.finishUnlock(unlockReply{err: context.Canceled})
 	for _, view := range s.vaultViews {
 		if view != nil {
 			view.CancelSearch()

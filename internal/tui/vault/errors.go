@@ -57,17 +57,17 @@ func storeErrorMessage(err error) string {
 	}
 	switch {
 	case errors.Is(err, vault.ErrUnsupported):
-		return "This vault does not support empty folders"
+		return "This operation is not supported by the selected vault"
 	case errors.Is(err, vault.ErrConflict):
 		return "Destination already exists"
 	case errors.Is(err, vault.ErrInvalidPath):
 		return "Invalid vault destination"
 	case errors.Is(err, vault.ErrUninitialized):
-		return "Vault is not initialized. Run: pass init <recipient>"
+		return "Vault is not initialized or signed in"
 	case errors.Is(err, vault.ErrLocked):
 		return "Vault locked (no details)"
 	case errors.Is(err, vault.ErrUnavailable):
-		return "Vault is unavailable. Check pass configuration."
+		return "Vault unavailable. Check the provider connection and configuration."
 	default:
 		return "Store failed"
 	}

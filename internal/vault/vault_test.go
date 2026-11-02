@@ -6,6 +6,32 @@ import (
 	"testing"
 )
 
+func TestMultilineNotesRoundTrip(t *testing.T) {
+	entry := Entry{Path: Path{"fixture"}, Password: "fixture", Notes: "first\nsecond\r\nthird"}
+	encoded, err := EncodeEntry(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeEntry(entry.Path, encoded)
+	if err != nil || decoded.Notes != entry.Notes {
+		t.Fatalf("notes round trip: %v", err)
+	}
+}
+
+func TestTypedEntriesRoundTrip(t *testing.T) {
+	for _, kind := range []EntryType{CardEntry, IdentityEntry, NoteEntry, SSHKeyEntry} {
+		entry := Entry{Type: kind, Path: Path{"fixture"}, Notes: "multiline\nnotes", Fields: map[string]string{"privateKey": "first\nsecond", "number": "1234"}}
+		encoded, err := EncodeEntry(entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, err := DecodeEntry(entry.Path, encoded)
+		if err != nil || decoded.Type != kind || decoded.Notes != entry.Notes || decoded.Fields["privateKey"] != entry.Fields["privateKey"] {
+			t.Fatalf("typed round trip: %v", err)
+		}
+	}
+}
+
 func TestPathValidation(t *testing.T) {
 	for _, path := range []Path{{""}, {"."}, {".."}, {"a/b"}, {"a\\b"}, {"a.gpg"}, {"a\n"}} {
 		if !errors.Is(path.Validate(), ErrInvalidPath) {

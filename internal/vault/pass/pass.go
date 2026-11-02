@@ -64,7 +64,8 @@ func New(storeDir string, runner Runner) *Provider {
 	return &Provider{StoreDir: storeDir, Runner: runner}
 }
 
-func (p *Provider) Name() string { return "pass" }
+func (p *Provider) Name() string                           { return "pass" }
+func (p *Provider) SupportedEntryTypes() []vault.EntryType { return vault.AllEntryTypes() }
 
 // StoreDirectory returns the configured or resolved pass store location.
 func (p *Provider) StoreDirectory() string { return p.storeDir() }

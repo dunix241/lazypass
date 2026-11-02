@@ -13,6 +13,35 @@ import (
 )
 
 func (s *StoreForm) HandleKey(event *tcell.EventKey) {
+	if s.choosingType {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			s.Close()
+		case tcell.KeyDown, tcell.KeyTAB:
+			s.moveEntryType(1)
+		case tcell.KeyUp, tcell.KeyBacktab:
+			s.moveEntryType(-1)
+		case tcell.KeyEnter:
+			s.choosingType = false
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'j':
+				s.moveEntryType(1)
+			case 'k':
+				s.moveEntryType(-1)
+			default:
+				s.choosingType = false
+				s.HandleKey(event)
+			}
+		}
+		return
+	}
+	if s.loadingEntries {
+		if event.Key() == tcell.KeyEscape {
+			s.Close()
+		}
+		return
+	}
 	if s.saving {
 		return
 	}
@@ -39,7 +68,7 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 		s.storePath = shared.DeleteLastRune(s.storePath)
 		s.refreshStoreSuggestions()
 	case tcell.KeyEnter:
-		if s.manual {
+		{
 			if strings.HasSuffix(s.storePath, "/") {
 				s.createFolder()
 				return
@@ -57,10 +86,12 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 				}
 				s.editingValue = true
 				s.storeMessage = ""
+				if !s.manual && s.deps.Password != nil {
+					s.value = s.deps.Password()
+				}
 			})
 			return
 		}
-		s.store()
 	case tcell.KeyRune:
 		if event.Rune() >= ' ' {
 			s.storePath += string(event.Rune())
@@ -70,22 +101,26 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 }
 
 func (s *StoreForm) store() {
+	s.commitField()
 	path, err := vault.ParsePath(s.storePath)
 	if err != nil || len(path) == 0 {
 		s.notify(shared.Warning, "Enter a valid vault destination")
 		return
 	}
-	password := ""
-	if s.manual {
-		password = s.value
-	} else if s.deps.Password != nil {
-		password = s.deps.Password()
-	}
+	password := s.value
 	entry := vault.Entry{Path: path, Password: password}
 	editing := s.editEntry != nil
 	if editing {
 		entry = *s.editEntry
 		entry.Password = password
+	}
+	entry.Username, entry.URL, entry.Notes = s.username, s.url, s.notes
+	entry.Type = s.entryType
+	if s.extraFields != nil {
+		entry.Fields = make(map[string]string, len(s.extraFields))
+		for key, value := range s.extraFields {
+			entry.Fields[key] = value
+		}
 	}
 	s.notify(shared.Info, "Saving…")
 	provider := s.deps.Service
@@ -125,34 +160,59 @@ func (s *StoreForm) createFolder() {
 }
 
 func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
+	value := s.activeField()
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.Close()
 	case tcell.KeyBacktab:
+		if s.field > 0 {
+			s.selectField(s.field - 1)
+			return
+		}
 		if s.editEntry != nil {
 			return
 		}
 		s.value = ""
 		s.editingValue = false
+	case tcell.KeyTAB:
+		s.selectField((s.field + 1) % len(s.entryFields()))
 	case tcell.KeyCtrlU:
-		s.value = ""
+		*value = ""
 	case tcell.KeyCtrlW:
-		s.value = shared.DeletePreviousWord(s.value)
+		*value = shared.DeletePreviousWord(*value)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		s.value = shared.DeleteLastRune(s.value)
+		*value = shared.DeleteLastRune(*value)
+	case tcell.KeyCtrlN:
+		if s.entryFields()[s.field].multiline && len(*value) < 64*1024 {
+			*value += "\n"
+		}
 	case tcell.KeyEnter:
-		if s.value == "" {
+		if s.entryType == vault.LoginEntry && s.value == "" {
 			s.notify(shared.Warning, "Enter a value")
 			return
 		}
 		s.store()
 	case tcell.KeyRune:
 		if event.Rune() >= ' ' {
-			if len(s.value)+len(string(event.Rune())) > 64*1024 {
+			if len(*value)+len(string(event.Rune())) > 64*1024 {
 				s.notify(shared.Warning, "Value limit is 64 KiB")
 				return
 			}
-			s.value += string(event.Rune())
+			*value += string(event.Rune())
+		}
+	}
+}
+
+func (s *StoreForm) activeField() *string {
+	return s.fieldValue(s.entryFields()[s.field].key)
+}
+
+func (s *StoreForm) moveEntryType(delta int) {
+	types := s.deps.Service.SupportedEntryTypes()
+	for index, kind := range types {
+		if kind == s.entryType {
+			s.entryType = types[(index+delta+len(types))%len(types)]
+			return
 		}
 	}
 }
