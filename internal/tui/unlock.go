@@ -24,13 +24,17 @@ type unlockPrompt struct {
 	reply chan unlockReply
 }
 
-func (s *screen) requestPassphrase(ctx context.Context) (string, error) {
+func (s *screen) requestVaultPassphrase(ctx context.Context, provider vault.Provider) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	request := &unlockPrompt{ctx: ctx, reply: make(chan unlockReply, 1)}
 	s.dispatch(ctx, func() {
 		if ctx.Err() != nil {
+			return
+		}
+		if provider != nil && !s.isActiveProvider(provider) {
+			request.reply <- unlockReply{err: context.Canceled}
 			return
 		}
 		if s.unlock != nil {

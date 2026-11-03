@@ -15,7 +15,7 @@ func TestSharedOperationRunnerYieldsAndCompletesOnDispatch(t *testing.T) {
 	s := &screen{running: true, operationContext: ctx, dispatch: func(_ context.Context, fn func()) { updates <- fn }}
 	started, release := make(chan struct{}), make(chan struct{})
 	completed := false
-	s.operationRunner()(func(ctx context.Context) error {
+	s.operationRunner(nil)(func(ctx context.Context) error {
 		if !vault.IsNoninteractive(ctx) {
 			t.Error("background operation allowed prompt")
 		}
@@ -55,7 +55,7 @@ func TestSharedOperationCancellationSkipsCompletion(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan struct{})
 	s := &screen{running: true, operationContext: ctx, dispatch: func(context.Context, func()) { t.Error("canceled operation dispatched") }}
-	s.operationRunner()(func(ctx context.Context) error { <-ctx.Done(); close(finished); return ctx.Err() }, func(error) { t.Error("canceled completion ran") })
+	s.operationRunner(nil)(func(ctx context.Context) error { <-ctx.Done(); close(finished); return ctx.Err() }, func(error) { t.Error("canceled completion ran") })
 	cancel()
 	select {
 	case <-finished:

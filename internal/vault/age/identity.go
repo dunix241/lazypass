@@ -205,7 +205,7 @@ func (p *Provider) unlock(ctx context.Context) ([]agecrypto.Identity, error) {
 	}
 	passphrase, err := vault.RequestPassphrase(ctx, p.Prompt)
 	if err != nil {
-		return nil, vault.ErrLocked
+		return nil, err
 	}
 	identity, err := agecrypto.NewScryptIdentity(passphrase)
 	if err != nil {

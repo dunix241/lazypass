@@ -8,11 +8,7 @@ import (
 	"lazypass/internal/vault"
 )
 
-func (s *screen) operationRunner(providers ...vault.Provider) vaultui.OperationRunner {
-	var provider vault.Provider
-	if len(providers) > 0 {
-		provider = providers[0]
-	}
+func (s *screen) operationRunner(provider vault.Provider) vaultui.OperationRunner {
 	_, hasPrompt := provider.(vault.PassphraseProvider)
 	return func(work func(context.Context) error, done func(error)) {
 		if !s.running {
@@ -22,7 +18,7 @@ func (s *screen) operationRunner(providers ...vault.Provider) vaultui.OperationR
 		ctx := s.operationContext
 		workContext := vault.WithoutPrompt(ctx)
 		if hasPrompt {
-			workContext = vault.WithPassphrasePrompt(ctx, s.requestPassphrase)
+			workContext = vault.WithPassphrasePrompt(ctx, func(request context.Context) (string, error) { return s.requestVaultPassphrase(request, provider) })
 		}
 		go func() {
 			err := work(workContext)
@@ -34,10 +30,18 @@ func (s *screen) operationRunner(providers ...vault.Provider) vaultui.OperationR
 					return
 				}
 				if errors.Is(err, vault.ErrPromptRequired) {
+					if !s.isActiveProvider(provider) {
+						done(context.Canceled)
+						return
+					}
 					err = s.withTerminal(func() error { return work(ctx) })
 				}
 				done(err)
 			})
 		}()
 	}
+}
+
+func (s *screen) isActiveProvider(provider vault.Provider) bool {
+	return s.vaultIndex >= 0 && s.vaultIndex < len(s.vaults) && s.vaults[s.vaultIndex].Service.Provider == provider
 }

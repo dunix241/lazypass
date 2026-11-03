@@ -15,13 +15,18 @@ func (s *screen) activateVault(index int) {
 	}
 	s.vaultIndex = index
 	selected := s.vaults[index]
+	notify := func(level shared.Level, message string) {
+		if s.vaultIndex == index {
+			s.notify(level, message)
+		}
+	}
 	if s.vaultViews[index] == nil {
 		s.vaultViews[index] = vaultui.New(vaultui.Dependencies{
 			Name:         selected.Name,
 			Service:      selected.Service,
 			RunPrompted:  s.runPrompted,
 			RunOperation: s.operationRunner(selected.Service.Provider),
-			Notify:       s.notify,
+			Notify:       notify,
 			OpenThemes:   s.openThemePanel,
 			OpenAdd:      s.openVaultAdd,
 			OpenEdit:     s.openVaultEdit,
@@ -32,7 +37,7 @@ func (s *screen) activateVault(index int) {
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
 		Service:      selected.Service,
 		Password:     s.generator.Password,
-		Notify:       s.notify,
+		Notify:       notify,
 		Closed:       func() { s.overlay = noOverlay },
 		RunPrompted:  s.runPrompted,
 		RunOperation: s.operationRunner(selected.Service.Provider),

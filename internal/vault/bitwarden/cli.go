@@ -86,7 +86,12 @@ func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extr
 			cause = debug.Timeout
 		}
 		debug.Failure("bitwarden command", cause)
-		return nil, vault.ErrUnavailable
+		classified := classifyFailure(ctx, output, err)
+		if errors.Is(classified, vault.ErrLocked) || errors.Is(classified, vault.ErrUninitialized) {
+			p.session = ""
+			p.metadata = nil
+		}
+		return nil, classified
 	}
 	return output, nil
 }
@@ -142,8 +147,8 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if s.Status == "unauthenticated" {
 		return vault.ErrUninitialized
 	}
-	if p.session != "" && s.Status == "unlocked" {
-		return nil
+	if s.Status != "locked" && s.Status != "unlocked" {
+		return vault.ErrMalformed
 	}
 	p.session = ""
 	if vault.IsNoninteractive(ctx) {
@@ -151,11 +156,11 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	}
 	password, err := vault.RequestPassphrase(ctx, p.Prompt)
 	if err != nil {
-		return vault.ErrLocked
+		return err
 	}
 	output, err := p.run(ctx, []string{"unlock", "--passwordenv", "LAZYPASS_BW_PASSWORD", "--raw"}, nil, "LAZYPASS_BW_PASSWORD="+password)
 	if err != nil {
-		return vault.ErrLocked
+		return err
 	}
 	session := strings.TrimSpace(string(output))
 	if session == "" || strings.ContainsAny(session, "\r\n\x00") {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"lazypass/internal/vault/service"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestUnlockPromptReturnsInputWithoutTerminalSuspension(t *testing.T) {
 	s := &screen{dispatch: func(_ context.Context, fn func()) { updates <- fn }}
 	result := make(chan string, 1)
 	go func() {
-		value, err := s.requestPassphrase(context.Background())
+		value, err := s.requestVaultPassphrase(context.Background(), nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -43,6 +44,31 @@ func TestUnlockPromptReturnsInputWithoutTerminalSuspension(t *testing.T) {
 	}
 }
 
+func TestInactiveVaultCannotOpenUnlockPrompt(t *testing.T) {
+	updates := make(chan func(), 1)
+	first, second := &memoryVault{}, &memoryVault{}
+	s := &screen{vaults: []NamedVault{{Service: service.Service{Provider: first}}, {Service: service.Service{Provider: second}}}, vaultIndex: 1, dispatch: func(_ context.Context, fn func()) { updates <- fn }}
+	finished := make(chan error, 1)
+	go func() { _, err := s.requestVaultPassphrase(context.Background(), first); finished <- err }()
+	select {
+	case update := <-updates:
+		update()
+	case <-time.After(time.Second):
+		t.Fatal("prompt not dispatched")
+	}
+	select {
+	case err := <-finished:
+		if err != context.Canceled {
+			t.Fatalf("inactive prompt: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("inactive prompt blocked")
+	}
+	if s.unlock != nil {
+		t.Fatal("inactive vault displayed prompt")
+	}
+}
+
 func TestUnlockInputUsesConsistentByteLimit(t *testing.T) {
 	p := &unlockPrompt{}
 	p.append("one\ntwo\x00\t")
@@ -65,7 +91,7 @@ func TestCanceledUnlockRemovesPopup(t *testing.T) {
 	updates := make(chan func(), 2)
 	s := &screen{operationContext: context.Background(), dispatch: func(_ context.Context, fn func()) { updates <- fn }}
 	finished := make(chan error, 1)
-	go func() { _, err := s.requestPassphrase(ctx); finished <- err }()
+	go func() { _, err := s.requestVaultPassphrase(ctx, nil); finished <- err }()
 	(<-updates)()
 	s.unlock.value = "fixture"
 	cancel()

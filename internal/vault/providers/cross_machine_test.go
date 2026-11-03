@@ -30,6 +30,28 @@ func TestCrossMachineMetadata(t *testing.T) {
 					t.Fatalf("%s type missing: %s", name, node.Name)
 				}
 			}
+			if os.Getenv("LAZYPASS_METADATA_REMOTE_EDIT") == "1" {
+				ctx := context.Background()
+				if name == "age" {
+					if err := p.Write(ctx, vault.Entry{Path: vault.Path{"Identity"}, Type: vault.IdentityEntry, Notes: "public remote edit", Fields: map[string]string{"firstName": "Remote"}}); err != nil {
+						t.Fatal(err)
+					}
+					if err := p.Delete(ctx, vault.Path{"Card"}); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					store := p.StoreDirectory()
+					if err := os.Remove(filepath.Join(store, "Card.gpg")); err != nil {
+						t.Fatal(err)
+					}
+					if err := metadata.Remove(store, vault.Path{"Card"}, false); err != nil {
+						t.Fatal(err)
+					}
+					if err := metadata.Write(store, vault.Path{"Identity"}, vault.IdentityEntry); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 		}
 		return
 	}
@@ -84,6 +106,32 @@ func TestCrossMachineMetadata(t *testing.T) {
 	binary := filepath.Join(local, "metadata.test")
 	command("go", "test", "-c", "-o", binary, "lazypass/internal/vault/providers")
 	command("scp", "-qr", fixtures, binary, host+":"+remote+"/")
-	output := command("ssh", "-o", "BatchMode=yes", host, "LAZYPASS_METADATA_REMOTE_ROOT="+remote+" "+remote+"/metadata.test -test.run '^TestCrossMachineMetadata$' -test.v")
+	output := command("ssh", "-o", "BatchMode=yes", host, "LAZYPASS_METADATA_REMOTE_ROOT="+remote+" LAZYPASS_METADATA_REMOTE_EDIT=1 "+remote+"/metadata.test -test.run '^TestCrossMachineMetadata$' -test.v")
 	t.Log(strings.TrimSpace(string(output)))
+	returned := filepath.Join(local, "returned")
+	if err := os.Mkdir(returned, 0700); err != nil {
+		t.Fatal(err)
+	}
+	command("scp", "-qr", host+":"+remote+"/fixtures", returned+"/")
+	for _, name := range []string{"age", "pass"} {
+		p, err := Builtins().Open(config.Vault{Name: name, Provider: name, StoreDir: filepath.Join(returned, "fixtures", name), IdentityFile: filepath.Join(local, "identity.age")}, func() (string, error) { return "public-fixture-passphrase", nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		nodes, err := p.List(context.Background(), nil)
+		if err != nil || len(nodes) != 4 {
+			t.Fatalf("returned %s deletion: %v", name, err)
+		}
+		for _, node := range nodes {
+			if !node.TypeKnown || node.EntryType == vault.CardEntry {
+				t.Fatal("returned metadata stale")
+			}
+		}
+		if name == "age" {
+			entry, err := p.Read(context.Background(), vault.Path{"Identity"})
+			if err != nil || entry.Notes != "public remote edit" || entry.Fields["firstName"] != "Remote" {
+				t.Fatalf("remote encrypted edit not restored: %v", err)
+			}
+		}
+	}
 }
