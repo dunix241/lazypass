@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/metadata"
 )
 
 // CreateFolder creates metadata-only directories; encryption remains owned by pass.
@@ -67,6 +68,11 @@ func (p *Provider) DeleteFolder(ctx context.Context, path vault.Path) error {
 	}
 	defer cleanup()
 	_, err = p.run(ctx, []string{"rm", "--recursive", "--force", "--", path.String() + "/"}, nil)
+	if err == nil {
+		if metaErr := metadata.Remove(p.storeDir(), path, true); metaErr == nil {
+			_ = p.commitMetadata(ctx)
+		}
+	}
 	return err
 }
 

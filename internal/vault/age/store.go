@@ -14,6 +14,7 @@ import (
 
 	agecrypto "filippo.io/age"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/metadata"
 )
 
 func (p *Provider) open(ctx context.Context) (*os.Root, error) {
@@ -156,6 +157,7 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 		}
 		return nodes[i].Name < nodes[j].Name
 	})
+	metadata.Decorate(p.StoreDir, nodes)
 	return nodes, nil
 }
 func (p *Provider) Read(ctx context.Context, path vault.Path) (vault.Entry, error) {
@@ -279,6 +281,9 @@ func (p *Provider) write(ctx context.Context, entry vault.Entry, create bool) er
 	if err != nil {
 		return vault.ErrUnavailable
 	}
+	if err := p.WriteMetadata(ctx, entry.Path, entry.Type); err != nil {
+		return vault.SavedWarning{}
+	}
 	return nil
 }
 func (p *Provider) CreateFolder(ctx context.Context, path vault.Path) error {
@@ -339,5 +344,15 @@ func (p *Provider) remove(ctx context.Context, path vault.Path, folder bool) err
 	if err != nil {
 		return vault.ErrUnavailable
 	}
+	_ = metadata.Remove(p.StoreDir, path, folder)
 	return nil
 }
+
+func (p *Provider) WriteMetadata(ctx context.Context, path vault.Path, kind vault.EntryType) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return metadata.Write(p.StoreDir, path, kind)
+}
+
+func (p *Provider) DecorateMetadata(nodes []vault.Node) { metadata.Decorate(p.StoreDir, nodes) }

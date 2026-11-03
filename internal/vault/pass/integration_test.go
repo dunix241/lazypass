@@ -130,7 +130,7 @@ func testVaultTerminal(t *testing.T, home, root string, p *Provider) {
 		t.Fatalf("build TUI: %v %s", err, output)
 	}
 	config := filepath.Join(home, "config.yaml")
-	if err := os.WriteFile(config, []byte("vault:\n  provider: pass\n  storeDir: "+root+"\n"), 0600); err != nil {
+	if err := os.WriteFile(config, []byte("vaults:\n  - name: fixture\n    provider: pass\n    storeDir: "+root+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	drive := func(keys string) {
@@ -145,14 +145,27 @@ env=dict(os.environ,TERM="xterm-256color")
 def terminal_session():
  os.setsid();fcntl.ioctl(slave,termios.TIOCSCTTY,0)
 p=subprocess.Popen([sys.argv[1],"--config",sys.argv[2],"vault"],stdin=slave,stdout=slave,stderr=slave,env=env,preexec_fn=terminal_session)
+captured=bytearray()
 def drain(delay):
  end=time.time()+delay
  while time.time()<end:
   ready,_,_=select.select([master],[],[],.05)
-  if ready: os.read(master,65536)
-drain(.5)
+  if ready: captured.extend(os.read(master,65536))
+drain(1)
 for key in sys.argv[3].split("|"):
- os.write(master,key.encode());drain(.7)
+ if key.startswith("WAITFILE:"):
+  filename=key[len("WAITFILE:"):];deadline=time.time()+15
+  while not os.path.isfile(filename) and time.time()<deadline: drain(.1)
+  assert os.path.isfile(filename),"save did not complete: "+repr(bytes(captured[-12000:]))
+ elif key.startswith("WAITTEXT:"):
+  filename,expected=key[len("WAITTEXT:"):].split("=",1);deadline=time.time()+15
+  while time.time()<deadline:
+   result=subprocess.run(["pass","show","--",filename],env=env,capture_output=True)
+   if result.returncode==0 and result.stdout.decode().splitlines()[0]==expected: break
+   drain(.1)
+  else: raise AssertionError("edit did not complete")
+ else:
+  os.write(master,key.encode());drain(1)
 p.wait(timeout=10)
 assert p.returncode==0,p.returncode
 assert termios.tcgetattr(slave)==before,"terminal modes not restored"
@@ -162,12 +175,12 @@ os.close(master);os.close(slave)
 			t.Fatalf("TUI fixture: %v %s", err, output)
 		}
 	}
-	drive("a|hello/world|\r|public-tui-fixture|\r|q")
+	drive("a|\r|hello/world|\r|public-tui-fixture|\r|WAITFILE:" + filepath.Join(root, "hello", "world.gpg") + "|q")
 	entry, err := p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-fixture" {
 		t.Fatalf("TUI add failed: %v", err)
 	}
-	drive("/|world|\r|\x1b|l|e|\x15|public-tui-edited|\r|q")
+	drive("/|world|\r|\x1b|l|e|\x15|public-tui-edited|\r|WAITTEXT:hello/world=public-tui-edited|q")
 	entry, err = p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-edited" {
 		t.Fatalf("TUI search/edit failed: %v", err)

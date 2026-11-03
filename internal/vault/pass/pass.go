@@ -15,6 +15,7 @@ import (
 
 	"lazypass/internal/debug"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/metadata"
 
 	"golang.org/x/term"
 )
@@ -138,6 +139,7 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 		}
 		return nodes[i].Name < nodes[j].Name
 	})
+	metadata.Decorate(p.storeDir(), nodes)
 	return nodes, nil
 }
 
@@ -174,6 +176,9 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 		return err
 	}
 	_, err = p.run(ctx, append([]string{"insert", "--multiline", "--force", "--"}, entry.Path.String()), strings.NewReader(encoded))
+	if err == nil && p.WriteMetadata(ctx, entry.Path, entry.Type) != nil {
+		return vault.SavedWarning{}
+	}
 	return err
 }
 
@@ -191,6 +196,11 @@ func (p *Provider) Delete(ctx context.Context, path vault.Path) error {
 	}
 	defer cleanup()
 	_, err = p.run(ctx, append([]string{"rm", "--force", "--"}, path.String()), nil)
+	if err == nil {
+		if metaErr := metadata.Remove(p.storeDir(), path, false); metaErr == nil {
+			_ = p.commitMetadata(ctx)
+		}
+	}
 	return err
 }
 

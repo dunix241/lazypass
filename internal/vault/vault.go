@@ -67,6 +67,9 @@ func ParsePath(text string) (Path, error) {
 
 func (p Path) Validate() error {
 	for _, part := range p {
+		if part == ".lazypass" {
+			return ErrInvalidPath
+		}
 		if part == "" || part == "." || part == ".." || part == ".gpg-id" || part == ".git" || strings.ContainsAny(part, `/\\`) || strings.HasSuffix(part, ".gpg") {
 			return fmt.Errorf("%w: invalid component", ErrInvalidPath)
 		}
@@ -178,3 +181,16 @@ type Locker interface{ Lock() }
 type FolderDeleter interface {
 	DeleteFolder(context.Context, Path) error
 }
+
+type MetadataWriter interface {
+	WriteMetadata(context.Context, Path, EntryType) error
+}
+
+type MetadataReader interface {
+	DecorateMetadata([]Node)
+}
+
+type SavedWarning struct{}
+
+func (SavedWarning) Error() string         { return "Entry saved, but type metadata needs repair" }
+func (e SavedWarning) UserMessage() string { return e.Error() }

@@ -22,6 +22,7 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	metadataLoading  bool
 	refreshing       bool
 	deleting         bool
 	loading          bool

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/service"
 )
 
 func TestProtectedVaultLifecycleAndRecovery(t *testing.T) {
@@ -124,10 +125,51 @@ func TestConcurrentCreateAndContainment(t *testing.T) {
 	}
 }
 
+func TestRebuildRestoresIdentityTypeWithoutEditing(t *testing.T) {
+	home := t.TempDir()
+	store, identity := filepath.Join(home, "store"), filepath.Join(home, "identity.age")
+	if err := Initialize(store, identity, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	p := New(store, identity, func() (string, error) { return "fixture", nil })
+	path := vault.Path{"identity"}
+	if err := p.Create(context.Background(), vault.Entry{Path: path, Type: vault.IdentityEntry, Fields: map[string]string{"firstName": "fixture"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(store, ".lazypass")); err != nil {
+		t.Fatal(err)
+	}
+	result, err := (service.Service{Provider: p}).RebuildMetadata(context.Background())
+	if err != nil || result.Indexed != 1 || result.Failed != 0 {
+		t.Fatalf("rebuild: %+v %v", result, err)
+	}
+	nodes, err := p.List(context.Background(), nil)
+	if err != nil || len(nodes) != 1 || !nodes[0].TypeKnown || nodes[0].EntryType != vault.IdentityEntry {
+		t.Fatalf("identity type missing after rebuild: %+v %v", nodes, err)
+	}
+}
+
 func TestRejectIdentityInsideStore(t *testing.T) {
 	store := t.TempDir()
 	if err := Initialize(store, filepath.Join(store, "identity.age"), "fixture"); !errors.Is(err, vault.ErrInvalidPath) {
 		t.Fatal("identity stored inside vault")
+	}
+}
+
+func TestTypedIconMetadataSurvivesProviderRestart(t *testing.T) {
+	home := t.TempDir()
+	store, identity := filepath.Join(home, "store"), filepath.Join(home, "identity.age")
+	if err := Initialize(store, identity, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	p := New(store, identity, nil)
+	if err := p.Create(context.Background(), vault.Entry{Type: vault.CardEntry, Path: vault.Path{"card"}, Fields: map[string]string{"number": "fixture"}}); err != nil {
+		t.Fatal(err)
+	}
+	fresh := New(store, identity, nil)
+	nodes, err := fresh.List(context.Background(), nil)
+	if err != nil || len(nodes) != 1 || !nodes[0].TypeKnown || nodes[0].EntryType != vault.CardEntry {
+		t.Fatalf("persistent type missing: %v %v", nodes, err)
 	}
 }
 

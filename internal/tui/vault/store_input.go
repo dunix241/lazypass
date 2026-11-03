@@ -130,6 +130,11 @@ func (s *StoreForm) store() {
 		}
 		return provider.Create(ctx, entry)
 	}, func(err error) {
+		var warning vault.SavedWarning
+		if errors.As(err, &warning) {
+			s.saved(path, warning.UserMessage())
+			return
+		}
 		if err != nil {
 			var diagnostic vault.Diagnostic
 			if !errors.As(err, &diagnostic) {

@@ -89,6 +89,20 @@ func init() {
 	initVault.Flags().String("identity-file", "", "encrypted age identity file outside the store")
 	initVault.Flags().String("recipient", "", "GPG recipient for pass, or existing X25519 public recipient for age")
 	vaultCommand.AddCommand(initVault)
+	metadataCommand := &cobra.Command{Use: "metadata", Short: "Repair vault type metadata"}
+	metadataCommand.AddCommand(&cobra.Command{Use: "rebuild", Short: "Rebuild type metadata from encrypted entries", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		s, err := vaultService(cmd)
+		if err != nil {
+			return err
+		}
+		result, err := s.RebuildMetadata(cmd.Context())
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Indexed: %d; failed: %d\n", result.Indexed, result.Failed)
+		return err
+	}})
+	vaultCommand.AddCommand(metadataCommand)
 	vaultCommand.AddCommand(
 		&cobra.Command{Use: "status", Short: "Show vault provider setup status", Args: cobra.NoArgs, RunE: runVaultStatus},
 		&cobra.Command{Use: "list [path]", Short: "List vault folders and entries", Args: cobra.MaximumNArgs(1), RunE: runVaultList},

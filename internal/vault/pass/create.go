@@ -76,6 +76,9 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 			return err
 		}
 	}
+	if err := p.WriteMetadata(ctx, entry.Path, entry.Type); err != nil {
+		return vault.SavedWarning{}
+	}
 	return nil
 }
 

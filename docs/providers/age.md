@@ -49,6 +49,18 @@ lazypass are always passphrase-protected.
 
 ## Backup and recovery
 
+Entry types are stored under `.lazypass/types/` inside the vault so icons remain
+consistent across machines. These records expose the entry path and type, never
+secret fields. Include `.lazypass/` when backing up or syncing the vault directory.
+For existing entries, rebuild their type records once:
+
+```sh
+lazypass --vault personal vault metadata rebuild
+```
+
+Rebuilding reads encrypted entries and may ask you to unlock the identity.
+Missing or malformed records use a generic entry icon without blocking access.
+
 Back up the vault directory and encrypted identity, and keep your passphrase
 recoverable separately. You need both the identity and its passphrase to restore
 access. The public recipient in `vault.json` cannot recover your passwords.

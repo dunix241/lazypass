@@ -61,6 +61,19 @@ GPG agent.
 
 ## Sync and backup
 
+Lazypass stores type-only records under `.lazypass/types/` at the store root and
+commits them when the store is Git-enabled. They contain entry paths and types,
+not passwords or other secret fields. Sync this directory with your entries.
+To index entries created before this feature or repair metadata after changes
+made in another client:
+
+```sh
+lazypass --vault work vault metadata rebuild
+```
+
+This decrypts entries to discover their types and can be interrupted. Unreadable
+entries are counted as failures; missing metadata does not prevent using them.
+
 For a Git-enabled store, sync explicitly:
 
 ```sh

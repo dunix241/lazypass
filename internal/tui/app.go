@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"lazypass/internal/config"
 	"lazypass/internal/debug"
@@ -77,11 +78,6 @@ func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, option
 	if len(s.vaults) == 0 {
 		s.vaults = []NamedVault{{Service: s.vaultService}}
 	}
-	for i := range s.vaults {
-		if s.vaults[i].Service.Types == nil {
-			s.vaults[i].Service.Types = &service.TypeCache{}
-		}
-	}
 	s.vaultViews = make([]*vaultui.View, len(s.vaults))
 	initialVault := 0
 	for i, item := range s.vaults {
@@ -121,6 +117,18 @@ func (a *App) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.screen.operationContext = ctx
 	a.screen.running = true
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				a.screen.dispatch(ctx, func() { a.screen.vault.RefreshMetadata(ctx) })
+			}
+		}
+	}()
 	defer func() { cancel(); a.screen.closeVaults() }()
 	return a.app.Run()
 }
