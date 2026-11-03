@@ -1,3 +1,4 @@
+// Command lazypass generates passwords and manages encrypted vaults.
 package main
 
 import (
