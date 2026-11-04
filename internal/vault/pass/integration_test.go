@@ -137,7 +137,7 @@ func testVaultTerminal(t *testing.T, home, root string, p *Provider) {
 		t.Helper()
 		// The PTY is isolated from the user's terminal; only public fixture values
 		// are rendered. Check terminal mode restoration on both exit paths.
-		script := `import os,pty,subprocess,sys,termios,time,fcntl,struct,select
+		script := `import os,pty,subprocess,sys,termios,time,fcntl,struct,select,codecs,pyte
 master,slave=pty.openpty()
 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack("HHHH",24,84,0,0))
 before=termios.tcgetattr(slave)
@@ -146,14 +146,32 @@ def terminal_session():
  os.setsid();fcntl.ioctl(slave,termios.TIOCSCTTY,0)
 p=subprocess.Popen([sys.argv[1],"--config",sys.argv[2],"vault"],stdin=slave,stdout=slave,stderr=slave,env=env,preexec_fn=terminal_session)
 captured=bytearray()
+screen=pyte.Screen(84,24)
+stream=pyte.Stream(screen)
+decoder=codecs.getincrementaldecoder("utf-8")("replace")
 def drain(delay):
  end=time.time()+delay
  while time.time()<end:
   ready,_,_=select.select([master],[],[],.05)
-  if ready: captured.extend(os.read(master,65536))
-drain(1)
+  if ready:
+   data=os.read(master,65536)
+   captured.extend(data);stream.feed(decoder.decode(data))
+def wait_ui(expected):
+ deadline=time.time()+20
+ while time.time()<deadline:
+  text="\n".join(screen.display)
+  if expected in text and "Loading" not in text: return
+  drain(.05)
+ raise AssertionError("UI did not reach "+repr(expected)+": "+repr("\n".join(screen.display)))
+wait_ui("No entries in this folder." if not os.path.isdir(os.path.join(os.environ["PASSWORD_STORE_DIR"],"hello")) else "hello/")
 for key in sys.argv[3].split("|"):
- if key.startswith("WAITFILE:"):
+ if key.startswith("WAITUI:"):
+  wait_ui(key[len("WAITUI:"):])
+ elif key.startswith("WAITABSENT:"):
+  filename=key[len("WAITABSENT:"):];deadline=time.time()+20
+  while os.path.exists(filename) and time.time()<deadline: drain(.05)
+  assert not os.path.exists(filename),"delete did not complete"
+ elif key.startswith("WAITFILE:"):
   filename=key[len("WAITFILE:"):];deadline=time.time()+15
   while not os.path.isfile(filename) and time.time()<deadline: drain(.1)
   assert os.path.isfile(filename),"save did not complete: "+repr(bytes(captured[-12000:]))
@@ -165,7 +183,9 @@ for key in sys.argv[3].split("|"):
    drain(.1)
   else: raise AssertionError("edit did not complete")
  else:
-  os.write(master,key.encode());drain(1)
+  if len(key)>1: os.write(master,b"\x1b[200~"+key.encode()+b"\x1b[201~")
+  else: os.write(master,key.encode())
+  drain(.05)
 p.wait(timeout=10)
 assert p.returncode==0,p.returncode
 assert termios.tcgetattr(slave)==before,"terminal modes not restored"
@@ -175,21 +195,21 @@ os.close(master);os.close(slave)
 			t.Fatalf("TUI fixture: %v %s", err, output)
 		}
 	}
-	drive("a|\r|hello/world|\r|public-tui-fixture|\r|WAITFILE:" + filepath.Join(root, "hello", "world.gpg") + "|q")
+	drive("a|WAITUI:Login|\r|WAITUI:Destination|hello/world|\r|WAITUI:Password:|public-tui-fixture|\r|WAITFILE:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Stored in vault|q")
 	entry, err := p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-fixture" {
 		t.Fatalf("TUI add failed: %v", err)
 	}
-	drive("/|world|\r|\x1b|l|e|\x15|public-tui-edited|\r|WAITTEXT:hello/world=public-tui-edited|q")
+	drive("l|WAITUI:world|\r|WAITUI:Copied to clipboard|e|WAITUI:Password:|\x15|public-tui-edited|\r|WAITTEXT:hello/world=public-tui-edited|WAITUI:Stored in vault|q")
 	entry, err = p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-edited" {
 		t.Fatalf("TUI search/edit failed: %v", err)
 	}
-	drive("l|d|n|d|y|q")
+	drive("l|WAITUI:world|d|WAITUI:Delete entry|n|d|WAITUI:Delete entry|y|WAITABSENT:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)
 	}
-	drive("d|y|q")
+	drive("d|WAITUI:Delete folder|y|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), nil); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI folder delete: %v %v", nodes, err)
 	}

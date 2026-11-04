@@ -70,10 +70,10 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
 		if _, err := p.run(ctx, []string{"git", "add", "--", entry.Path.String() + ".gpg"}, nil); err != nil {
-			return err
+			return vault.SavedWarning{}
 		}
 		if _, err := p.run(ctx, []string{"git", "commit", "-m", "Add vault entry", "--", entry.Path.String() + ".gpg"}, nil); err != nil {
-			return err
+			return vault.SavedWarning{}
 		}
 	}
 	if err := p.WriteMetadata(ctx, entry.Path, entry.Type); err != nil {

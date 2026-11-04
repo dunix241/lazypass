@@ -210,7 +210,7 @@ func TestMalformedEntryLogsCauseWithoutContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &fakeRunner{fn: func(context.Context, []string, string, []string) ([]byte, error) {
-		return []byte("secret-value\ninvalid metadata"), nil
+		return []byte("lazypass-entry-v2\nsecret-value invalid structured data"), nil
 	}}
 	if _, err := New(root, runner).Read(context.Background(), vault.Path{"entry"}); !errors.Is(err, vault.ErrMalformed) {
 		t.Fatalf("read error = %v", err)

@@ -12,9 +12,11 @@ import (
 )
 
 type fakeRunner struct {
-	calls   int
-	edited  map[string]any
-	unlocks int
+	itemType int
+	gets     int
+	calls    int
+	edited   map[string]any
+	unlocks  int
 }
 
 func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env []string) ([]byte, error) {
@@ -34,8 +36,15 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 	case "list folders":
 		return []byte(`[{"id":"folder-id","name":"hello"}]`), nil
 	case "list items":
+		if r.itemType != 0 {
+			return []byte(`[{"id":"item-id","name":"world","folderId":"folder-id","type":3}]`), nil
+		}
 		return []byte(`[{"id":"item-id","name":"world","folderId":"folder-id","type":1,"login":{"username":"user","password":"fixture"}}]`), nil
 	case "get item item-id":
+		r.gets++
+		if r.itemType != 0 {
+			return []byte(`{"id":"item-id","type":3,"name":"world","card":{"number":"4111111111111111"}}`), nil
+		}
 		return []byte(`{"id":"item-id","type":1,"name":"world","login":{"password":"fixture","totp":"preserved","uris":[{"uri":"https://one"},{"uri":"https://two"}]},"fields":[{"name":"custom","value":"kept"}]}`), nil
 	case "edit item item-id":
 		encoded, _ := io.ReadAll(input)
@@ -47,6 +56,18 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 		return []byte(`{}`), err
 	default:
 		return []byte(`{}`), nil
+	}
+}
+
+func TestTypedReadUsesOneCLIGet(t *testing.T) {
+	r := &fakeRunner{itemType: 3}
+	p := New(t.TempDir(), "", func() (string, error) { return "fixture", nil }, r)
+	entry, err := p.Read(context.Background(), vault.Path{"hello", "world"})
+	if err != nil || entry.Type != vault.CardEntry || entry.Fields["number"] != "4111111111111111" {
+		t.Fatalf("typed read: %v", err)
+	}
+	if r.gets != 1 {
+		t.Fatalf("typed read launched %d CLI get commands", r.gets)
 	}
 }
 

@@ -4,33 +4,33 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
 
 // EncodeEntry produces the conventional pass multiline entry format.
 func EncodeEntry(entry Entry) (string, error) {
+	if len(entry.Path) == 0 || entry.Path.Validate() != nil {
+		return "", ErrInvalidPath
+	}
 	if entry.Type > LoginEntry {
 		if entry.Type > SSHKeyEntry {
 			return "", ErrMalformed
 		}
-		if len(entry.Path) == 0 || entry.Path.Validate() != nil {
-			return "", ErrInvalidPath
-		}
-		data, err := json.Marshal(entry)
+		data, err := json.MarshalIndent(entry, "", "  ")
 		if err != nil {
 			return "", ErrMalformed
 		}
-		return "lazypass-entry-v1:" + base64.StdEncoding.EncodeToString(data) + "\n", nil
-	}
-	if err := entry.Path.Validate(); err != nil || len(entry.Path) == 0 {
-		if err == nil {
-			err = ErrInvalidPath
-		}
-		return "", err
+		return "lazypass-entry-v2\n" + string(data) + "\n", nil
 	}
 	if err := validateEntryValue(entry.Password); err != nil {
 		return "", err
+	}
+	if original := entry.Preserved; original != nil {
+		if entry.Username == original.Username && entry.URL == original.URL && entry.Notes == original.Notes && maps.Equal(entry.Fields, original.Fields) {
+			return entry.Password + original.Tail, nil
+		}
 	}
 	lines := []string{entry.Password}
 	appendField := func(name, value string) error {
@@ -80,34 +80,29 @@ func validateEntryValue(value string) error {
 
 // DecodeEntry decodes a pass show result without placing its contents in errors.
 func DecodeEntry(path Path, text string) (Entry, error) {
+	if len(path) == 0 || path.Validate() != nil {
+		return Entry{}, ErrInvalidPath
+	}
+	if strings.HasPrefix(text, "lazypass-entry-v2\n") {
+		return decodeTypedEntry(path, []byte(strings.TrimPrefix(text, "lazypass-entry-v2\n")))
+	}
 	if strings.HasPrefix(text, "lazypass-entry-v1:") {
 		data, err := base64.StdEncoding.DecodeString(strings.TrimSuffix(strings.TrimPrefix(text, "lazypass-entry-v1:"), "\n"))
 		if err != nil {
 			return Entry{}, ErrMalformed
 		}
-		var entry Entry
-		if json.Unmarshal(data, &entry) != nil || entry.Type == LoginEntry || entry.Type > SSHKeyEntry {
-			return Entry{}, ErrMalformed
-		}
-		if len(path) == 0 || path.Validate() != nil {
-			return Entry{}, ErrInvalidPath
-		}
-		entry.Path = append(Path(nil), path...)
-		return entry, nil
+		return decodeTypedEntry(path, data)
 	}
-	if err := path.Validate(); err != nil || len(path) == 0 {
-		if err == nil {
-			err = ErrInvalidPath
-		}
-		return Entry{}, err
-	}
+	original := text
 	text = strings.TrimSuffix(text, "\n")
 	lines := strings.Split(text, "\n")
 	entry := Entry{Path: append(Path(nil), path...), Password: strings.TrimSuffix(lines[0], "\r"), Fields: map[string]string{}}
+	var freeform []string
 	for _, line := range lines[1:] {
 		key, value, ok := strings.Cut(strings.TrimSuffix(line, "\r"), ": ")
 		if !ok || key == "" {
-			return Entry{}, ErrMalformed
+			freeform = append(freeform, line)
+			continue
 		}
 		switch key {
 		case "Username":
@@ -119,12 +114,37 @@ func DecodeEntry(path Path, text string) (Entry, error) {
 		case "Lazypass-Notes-Base64":
 			decoded, err := base64.StdEncoding.DecodeString(value)
 			if err != nil {
-				return Entry{}, ErrMalformed
+				freeform = append(freeform, line)
+				continue
 			}
 			entry.Notes = string(decoded)
 		default:
 			entry.Fields[key] = value
 		}
 	}
+	if len(freeform) > 0 {
+		if entry.Notes != "" {
+			entry.Notes += "\n"
+		}
+		entry.Notes += strings.Join(freeform, "\n")
+	}
+	tail := ""
+	if index := strings.IndexByte(original, '\n'); index >= 0 {
+		start := index
+		if index > 0 && original[index-1] == '\r' {
+			start--
+		}
+		tail = original[start:]
+	}
+	entry.Preserved = &EntryText{Tail: tail, Username: entry.Username, URL: entry.URL, Notes: entry.Notes, Fields: maps.Clone(entry.Fields)}
+	return entry, nil
+}
+
+func decodeTypedEntry(path Path, data []byte) (Entry, error) {
+	var entry Entry
+	if json.Unmarshal(data, &entry) != nil || entry.Type == LoginEntry || entry.Type > SSHKeyEntry {
+		return Entry{}, ErrMalformed
+	}
+	entry.Path = append(Path(nil), path...)
 	return entry, nil
 }

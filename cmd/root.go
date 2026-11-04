@@ -85,7 +85,7 @@ func init() {
 	initVault.Flags().String("provider", "age", "vault provider")
 	initVault.Flags().String("name", "", "name for the new vault (defaults to provider)")
 	initVault.Flags().String("server", "", "Bitwarden or Vaultwarden server URL")
-	initVault.Flags().String("store-dir", "", "age store directory")
+	initVault.Flags().String("store-dir", "", "vault store or provider CLI data directory")
 	initVault.Flags().String("identity-file", "", "encrypted age identity file outside the store")
 	initVault.Flags().String("recipient", "", "GPG recipient for pass, or existing X25519 public recipient for age")
 	vaultCommand.AddCommand(initVault)

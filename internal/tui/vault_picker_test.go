@@ -69,6 +69,7 @@ func TestVaultPickerPreservesFolderStateAndRoutesWrites(t *testing.T) {
 	if err := a.Init(); err != nil {
 		t.Fatal(err)
 	}
+	a.screen.vault.Refresh()
 	key := func(k tcell.Key, r rune) { a.screen.InputHandler()(tcell.NewEventKey(k, r, tcell.ModNone), nil) }
 	key(tcell.KeyEnter, 0)
 	key(tcell.KeyRune, 'V')

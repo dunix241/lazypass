@@ -15,6 +15,7 @@ import (
 	vaultui "lazypass/internal/tui/vault"
 	"lazypass/internal/vault/service"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -107,9 +108,6 @@ func (a *App) Init() error {
 	if err := a.screen.generator.Regenerate(); err != nil {
 		return err
 	}
-	if a.screen.route == VaultRoute {
-		a.screen.vault.Refresh()
-	}
 	a.app.SetRoot(a.screen, true).SetFocus(a.screen)
 	return nil
 }
@@ -117,6 +115,16 @@ func (a *App) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.screen.operationContext = ctx
 	a.screen.running = true
+	initialDraw := true
+	a.app.SetBeforeDrawFunc(func(tcell.Screen) bool {
+		if initialDraw {
+			initialDraw = false
+			if a.screen.route == VaultRoute {
+				a.screen.vault.Refresh()
+			}
+		}
+		return false
+	})
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()

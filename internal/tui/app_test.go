@@ -60,6 +60,27 @@ func TestInitialRenderDoesNotCreateConfig(t *testing.T) {
 	}
 }
 
+type startupVault struct {
+	memoryVault
+	listed bool
+}
+
+func (p *startupVault) List(context.Context, vault.Path) ([]vault.Node, error) {
+	p.listed = true
+	return nil, vault.ErrPromptRequired
+}
+
+func TestInitDoesNotUnlockBeforeEventLoop(t *testing.T) {
+	p := &startupVault{}
+	a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: p}), WithInitialRoute(VaultRoute))
+	if err := a.Init(); err != nil {
+		t.Fatal(err)
+	}
+	if p.listed {
+		t.Fatal("Init accessed locked provider before TUI started")
+	}
+}
+
 func TestRouteSwitchPreservesGeneratorState(t *testing.T) {
 	a := NewApp(config.Defaults(), "", nil, WithInitialRoute(VaultRoute))
 	if err := a.Init(); err != nil {

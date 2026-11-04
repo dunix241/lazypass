@@ -100,9 +100,19 @@ type Node struct {
 }
 
 type Entry struct {
-	Type     EntryType
-	Path     Path
-	Password string
+	Preserved *EntryText `json:"-"`
+	Type      EntryType
+	Path      Path
+	Password  string
+	Username  string
+	URL       string
+	Notes     string
+	Fields    map[string]string
+}
+
+// EntryText retains externally authored text during password-only updates.
+type EntryText struct {
+	Tail     string
 	Username string
 	URL      string
 	Notes    string
@@ -192,5 +202,7 @@ type MetadataReader interface {
 
 type SavedWarning struct{}
 
-func (SavedWarning) Error() string         { return "Entry saved, but type metadata needs repair" }
+func (SavedWarning) Error() string {
+	return "Entry saved, but metadata or Git bookkeeping needs repair"
+}
 func (e SavedWarning) UserMessage() string { return e.Error() }

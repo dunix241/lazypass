@@ -200,14 +200,15 @@ func (p *Provider) Read(ctx context.Context, path vault.Path) (vault.Entry, erro
 	if err != nil {
 		return vault.Entry{}, err
 	}
-	entry, err = decode[item](p.run(ctx, []string{"get", "item", entry.ID}, nil))
+	output, err := p.run(ctx, []string{"get", "item", entry.ID}, nil)
+	entry, err = decode[item](output, err)
 	if err != nil {
 		return vault.Entry{}, err
 	}
 	result := vault.Entry{Path: append(vault.Path(nil), path...), Password: entry.Login.Password, Username: entry.Login.Username, Notes: entry.Notes}
 	result.Type = entryType(entry.Type)
 	if result.Type != vault.LoginEntry {
-		raw, err := decode[map[string]json.RawMessage](p.run(ctx, []string{"get", "item", entry.ID}, nil))
+		raw, err := decode[map[string]json.RawMessage](output, nil)
 		if err != nil {
 			return vault.Entry{}, err
 		}
@@ -329,6 +330,9 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 				if json.Unmarshal(value, &values) != nil {
 					return vault.ErrMalformed
 				}
+			}
+			if values == nil {
+				values = map[string]json.RawMessage{}
 			}
 			for key, value := range entry.Fields {
 				values[key], _ = json.Marshal(value)

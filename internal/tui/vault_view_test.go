@@ -18,6 +18,7 @@ func TestVaultCopyDoesNotSuspendWithoutPrompt(t *testing.T) {
 			if err := a.Init(); err != nil {
 				t.Fatal(err)
 			}
+			a.screen.vault.Refresh()
 			if a.screen.suspend == nil {
 				t.Fatal("terminal suspension not wired")
 			}

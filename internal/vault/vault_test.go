@@ -62,12 +62,29 @@ func TestEntryCodecRoundTrip(t *testing.T) {
 }
 
 func TestDecodeMalformedEntryDoesNotExposeSecret(t *testing.T) {
-	_, err := DecodeEntry(Path{"entry"}, "super-secret\ninvalid metadata")
+	_, err := DecodeEntry(Path{"entry"}, "lazypass-entry-v2\ninvalid structured data")
 	if err == nil {
 		t.Fatal("expected malformed entry error")
 	}
 	if strings.Contains(err.Error(), "super-secret") {
 		t.Fatal("secret leaked in error")
+	}
+}
+
+func TestExternalPassTextPreservedOnPasswordUpdate(t *testing.T) {
+	original := "old-password\r\nusername: external-user\r\nfree-form notes\r\n\r\nURL: https://example.invalid\r\ncustom: untouched\r\n"
+	entry, err := DecodeEntry(Path{"entry"}, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry.Password = "new-password"
+	encoded, err := EncodeEntry(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "new-password" + original[len("old-password"):]
+	if encoded != want {
+		t.Fatalf("external tail changed: %q", encoded)
 	}
 }
 

@@ -176,7 +176,7 @@ func (p *Provider) unlock(ctx context.Context) ([]agecrypto.Identity, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if ctx.Err() != nil {
-		return nil, vault.ErrUnavailable
+		return nil, ctx.Err()
 	}
 	if len(p.identities) > 0 {
 		return p.identities, nil
@@ -211,6 +211,9 @@ func (p *Provider) unlock(ctx context.Context) ([]agecrypto.Identity, error) {
 	if err != nil {
 		return nil, vault.ErrLocked
 	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	r, err := agecrypto.Decrypt(bytes.NewReader(data), identity)
 	if err != nil {
 		return nil, vault.ErrLocked
@@ -223,6 +226,9 @@ func (p *Provider) unlock(ctx context.Context) ([]agecrypto.Identity, error) {
 	ids, err := agecrypto.ParseIdentities(bytes.NewReader(plain))
 	if err != nil || len(ids) == 0 {
 		return nil, vault.ErrMalformed
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	p.identities = ids
 	return ids, nil

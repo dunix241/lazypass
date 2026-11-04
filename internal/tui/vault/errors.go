@@ -14,6 +14,10 @@ func copyErrorMessage(err error) string {
 		return diagnostic.UserMessage()
 	}
 	switch {
+	case errors.Is(err, service.ErrEmptyCopy):
+		return "This entry has no value to copy"
+	case errors.Is(err, service.ErrIdentityCopy):
+		return "Identity entries have no default copy field"
 	case errors.Is(err, vault.ErrLocked):
 		return "Vault locked (no details)"
 	case errors.Is(err, vault.ErrNotFound):

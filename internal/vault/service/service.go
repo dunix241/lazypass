@@ -10,6 +10,8 @@ import (
 )
 
 var ErrClipboard = errors.New("clipboard unavailable")
+var ErrEmptyCopy = errors.New("this entry has no value to copy")
+var ErrIdentityCopy = errors.New("identity entries have no default copy field")
 
 type Service struct {
 	Types    *TypeCache
@@ -187,9 +189,18 @@ func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
 	case vault.NoteEntry:
 		value = entry.Notes
 	case vault.SSHKeyEntry:
-		value = entry.Fields["privateKey"]
+		value = entry.Fields["publicKey"]
 	case vault.IdentityEntry:
+		return ErrIdentityCopy
+	case vault.LoginEntry:
+	default:
 		return vault.ErrUnsupported
+	}
+	if value == "" {
+		return ErrEmptyCopy
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := s.Copy(value); err != nil {
 		return ErrClipboard
