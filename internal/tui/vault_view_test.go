@@ -32,7 +32,7 @@ func TestVaultCopyDoesNotSuspendWithoutPrompt(t *testing.T) {
 				a.screen.suspend = nil
 			}
 			a.screen.InputHandler()(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
-			if copied != "secret" || calls != 1 || a.screen.status != "Copied to clipboard" || suspended {
+			if message := a.screen.notifications.Current(); copied != "secret" || calls != 1 || message == nil || message.Text != "Copied to clipboard" || suspended {
 				t.Fatalf("copy=%q calls=%d suspended=%t", copied, calls, suspended)
 			}
 		})

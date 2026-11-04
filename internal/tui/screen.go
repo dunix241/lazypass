@@ -6,6 +6,7 @@ import (
 
 	"lazypass/internal/config"
 	generatorui "lazypass/internal/tui/generator"
+	"lazypass/internal/tui/notification"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/tui/themepanel"
 	vaultui "lazypass/internal/tui/vault"
@@ -28,9 +29,15 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
-	unlock           *unlockPrompt
-	running          bool
-	operationContext context.Context
+	notificationTimer    *time.Timer
+	notificationDeadline time.Time
+	drawnNotification    *notification.Message
+	loggedNotification   *notification.Message
+	notifications        notification.Manager
+	notificationBounds   []shared.Rect
+	unlock               *unlockPrompt
+	running              bool
+	operationContext     context.Context
 	*tview.Box
 	cfg                 config.Config
 	cfgPath             string
@@ -42,9 +49,6 @@ type screen struct {
 	overlay             overlay
 	vaultService        service.Service
 	colors              shared.Palette
-	status              string
-	statusTill          time.Time
-	statusLevel         shared.Level
 	quit                func()
 	suspend             func(func()) bool
 	vaults              []NamedVault
@@ -55,6 +59,8 @@ type screen struct {
 }
 
 func (s *screen) Draw(screen tcell.Screen) {
+	s.notificationBounds = nil
+	s.drawnNotification = nil
 	x, y, width, height := s.GetRect()
 	for yy := y; yy < y+height; yy++ {
 		for xx := x; xx < x+width; xx++ {

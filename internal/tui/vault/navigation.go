@@ -94,7 +94,6 @@ func (s *View) copyVaultEntry() {
 		return
 	}
 	s.copying = true
-	s.notify(shared.Info, "Copying…")
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error { return s.vault.CopyPassword(ctx, node.Path) }, func(err error) {
 		s.copying = false
 		if err != nil {

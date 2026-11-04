@@ -19,6 +19,9 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.loadingEntry || s.editEntry != nil {
 		title = " Edit entry "
 	}
+	if s.saving && !s.loadingEntry {
+		title = strings.TrimSpace(title) + " · working… "
+	}
 	shared.PrintAt(screen, r.X+2, r.Y, title, colors.Accent)
 	if s.loadingEntry {
 		shared.PrintAt(screen, r.X+2, r.Y+3, "Loading entry…", colors.Muted)

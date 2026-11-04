@@ -9,6 +9,14 @@ import (
 
 func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(tview.Primitive)) (bool, tview.Primitive) {
 	return s.WrapMouseHandler(func(action tview.MouseAction, event *tcell.EventMouse, _ func(tview.Primitive)) (bool, tview.Primitive) {
+		x, y := event.Position()
+		if action == tview.MouseLeftClick {
+			for i, bounds := range s.notificationBounds {
+				if bounds.Contains(x, y) && s.activateNotification(i) {
+					return true, nil
+				}
+			}
+		}
 		if s.unlock != nil {
 			return true, s
 		}

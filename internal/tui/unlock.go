@@ -100,7 +100,6 @@ func (s *screen) handleUnlock(event *tcell.EventKey) {
 		s.finishUnlock(unlockReply{err: vault.ErrLocked})
 	case tcell.KeyEnter:
 		s.finishUnlock(unlockReply{value: p.value})
-		s.notify(shared.Info, "Unlocking…")
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		p.value = shared.DeleteLastRune(p.value)
 	case tcell.KeyCtrlU:

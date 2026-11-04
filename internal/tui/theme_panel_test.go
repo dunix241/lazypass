@@ -20,7 +20,7 @@ func TestConfiguredThemeAndFallbackAreScreenLocal(t *testing.T) {
 	bad := config.Defaults()
 	bad.Theme = "missing-theme"
 	b := NewApp(bad, "", nil)
-	if a.screen.colors == shared.DefaultPalette() || b.screen.colors != shared.DefaultPalette() || b.screen.status == "" || a.screen.colors == b.screen.colors {
+	if a.screen.colors == shared.DefaultPalette() || b.screen.colors != shared.DefaultPalette() || b.screen.notifications.Current() == nil || a.screen.colors == b.screen.colors {
 		t.Fatal("screen-local configured theme/fallback failed")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"lazypass/internal/update"
 	"lazypass/internal/util"
 
 	"gopkg.in/yaml.v3"
@@ -15,7 +16,40 @@ import (
 var mu sync.Mutex
 
 type session struct {
-	Vaults map[string]string `yaml:"lastVaults"`
+	Vaults  map[string]string `yaml:"lastVaults"`
+	Updates update.Cache      `yaml:"updates,omitempty"`
+}
+
+type UpdateStore struct{}
+
+func (UpdateStore) LoadUpdates() (update.Cache, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	file, err := path()
+	if err != nil {
+		return update.Cache{}, err
+	}
+	value, err := load(file)
+	return value.Updates, err
+}
+
+func (UpdateStore) SaveUpdates(cache update.Cache) error {
+	mu.Lock()
+	defer mu.Unlock()
+	file, err := path()
+	if err != nil {
+		return err
+	}
+	value, err := load(file)
+	if err != nil {
+		return err
+	}
+	value.Updates = cache
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return util.WritePrivateFile(file, data)
 }
 
 func path() (string, error) {

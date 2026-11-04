@@ -13,14 +13,14 @@ import (
 func TestCopyStatusReflectsClipboardOutcome(t *testing.T) {
 	success := NewApp(config.Defaults(), "", func(string) error { return nil })
 	success.screen.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'c', tcell.ModNone), nil)
-	if success.screen.status != "Copied to clipboard" || success.screen.statusLevel != notificationSuccess {
-		t.Fatalf("success notification = %q/%d", success.screen.status, success.screen.statusLevel)
+	if message := success.screen.notifications.Current(); message == nil || message.Text != "Copied to clipboard" || message.Level != notificationSuccess {
+		t.Fatalf("success notification = %+v", message)
 	}
 
 	failure := NewApp(config.Defaults(), "", func(string) error { return errors.New("no clipboard") })
 	failure.screen.InputHandler()(tcell.NewEventKey(tcell.KeyRune, 'c', tcell.ModNone), nil)
-	if failure.screen.status != "Clipboard unavailable" || failure.screen.statusLevel != notificationError {
-		t.Fatalf("failure notification = %q/%d", failure.screen.status, failure.screen.statusLevel)
+	if message := failure.screen.notifications.Current(); message == nil || message.Text != "Clipboard unavailable" || message.Level != notificationError {
+		t.Fatalf("failure notification = %+v", message)
 	}
 }
 

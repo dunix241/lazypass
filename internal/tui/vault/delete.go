@@ -43,7 +43,6 @@ func (s *View) handleDeleteKey(event *tcell.EventKey) {
 		node := *s.deleteTarget
 		s.deleteTarget = nil
 		s.deleting = true
-		s.notify(shared.Info, "Deleting…")
 		s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error { return s.vault.Delete(ctx, node) }, func(err error) {
 			s.deleting = false
 			if err != nil {

@@ -18,6 +18,14 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.deps.Name != "" {
 		title += " · " + s.deps.Name
 	}
+	switch {
+	case s.deleting:
+		title += " · deleting…"
+	case s.copying:
+		title += " · copying…"
+	case s.refreshing:
+		title += " · refreshing…"
+	}
 	shared.PrintAt(screen, r.X+2, r.Y, shared.Truncate(" "+title+": "+path+" ", r.W-4), colors.Accent)
 	if s.vault.Provider == nil {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)

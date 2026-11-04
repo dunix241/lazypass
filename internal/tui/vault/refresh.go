@@ -11,7 +11,6 @@ func (s *View) refreshProvider() {
 		return
 	}
 	s.refreshing = true
-	s.notify(shared.Info, "Refreshing…")
 	provider := s.vault
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
 		if provider.Provider != nil && provider.Provider.Capabilities().Sync {

@@ -96,6 +96,13 @@ func Failure(operation Operation, cause Cause) {
 	write(fmt.Sprintf("operation=%q cause=%q", operation, cause.String()))
 }
 
+// Event records fixed lifecycle markers without accepting payload data.
+func Event(operation Operation) {
+	if Enabled() {
+		write(fmt.Sprintf("pid=%d event=%q", os.Getpid(), operation))
+	}
+}
+
 func ProcessFailure(operation Operation, cause Cause, state ProcessState) {
 	if !Enabled() {
 		return

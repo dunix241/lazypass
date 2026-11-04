@@ -122,7 +122,6 @@ func (s *StoreForm) store() {
 			entry.Fields[key] = value
 		}
 	}
-	s.notify(shared.Info, "Saving…")
 	provider := s.deps.Service
 	s.run(func(ctx context.Context) error {
 		if editing {
@@ -153,7 +152,6 @@ func (s *StoreForm) createFolder() {
 		s.notify(shared.Warning, "Enter a valid folder destination")
 		return
 	}
-	s.notify(shared.Info, "Creating folder…")
 	provider := s.deps.Service
 	s.run(func(ctx context.Context) error { return provider.CreateFolder(ctx, path) }, func(err error) {
 		if err != nil {

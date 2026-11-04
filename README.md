@@ -84,6 +84,16 @@ forwarding, such as `set -g set-clipboard on`.
 For local Linux clipboard support, install `wl-copy` on Wayland or `xclip` on
 X11. macOS and Windows use native clipboard tools.
 
+### Updates
+
+Lazypass notifies you when a new release is available. Check manually with
+`lazypass update check`. To disable update notifications, set:
+
+```yaml
+updates:
+  check: false
+```
+
 ### Troubleshooting
 
 Set `LAZYPASS_DEBUG=1` to record failure diagnostics in

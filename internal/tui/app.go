@@ -125,6 +125,14 @@ func (a *App) Run() error {
 		}
 		return false
 	})
+	updatesScheduled := false
+	a.app.SetAfterDrawFunc(func(tcell.Screen) {
+		a.screen.scheduleNotification(ctx)
+		if !updatesScheduled {
+			updatesScheduled = true
+			a.screen.checkUpdates(ctx)
+		}
+	})
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -137,6 +145,6 @@ func (a *App) Run() error {
 			}
 		}
 	}()
-	defer func() { cancel(); a.screen.closeVaults() }()
+	defer func() { cancel(); a.screen.stopNotificationTimer(); a.screen.closeVaults() }()
 	return a.app.Run()
 }

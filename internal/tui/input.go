@@ -7,6 +7,9 @@ import (
 
 func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 	return s.WrapInputHandler(func(event *tcell.EventKey, _ func(tview.Primitive)) {
+		if event.Key() >= tcell.KeyF2 && event.Key() <= tcell.KeyF12 && s.activateNotification(int(event.Key()-tcell.KeyF2)) {
+			return
+		}
 		if s.unlock != nil {
 			s.handleUnlock(event)
 			return
