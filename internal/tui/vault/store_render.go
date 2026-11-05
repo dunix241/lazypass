@@ -1,14 +1,15 @@
 package vault
 
 import (
+	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
+	screen.HideCursor()
 	r, visible := s.storeFormRect(frame.Viewport)
 	colors := frame.Palette
 	shared.DrawBox(screen, r, colors.Focus, colors.Surface)
@@ -47,21 +48,34 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.editingValue {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Entry: "+s.storePath, r.W-4), colors.Muted)
 		fields := s.entryFields()
-		rows := min(len(fields), max(1, r.H-6))
+		extra := 0
+		if fields[s.field].multiline {
+			extra = min(3, max(0, r.H-7))
+		}
+		rows := min(len(fields), max(1, r.H-6-extra))
 		start := max(0, s.field-rows+1)
 		for row := 0; row < rows; row++ {
 			i := start + row
 			field := fields[i]
 			color := colors.Text
-			value := strings.ReplaceAll(s.displayField(i), "\n", " ↵ ")
-			if field.secret {
-				value = strings.Repeat("*", min(utf8.RuneCountInString(value), max(0, r.W-18)))
-			}
-			if i == s.field {
+			focused := i == s.field
+			if focused {
 				color = colors.Focus
-				value += "_"
 			}
-			shared.PrintAt(screen, r.X+2, r.Y+4+row, shared.Truncate(field.label+": "+value, r.W-4), color)
+			label := field.label + ": "
+			y := r.Y + 4 + row
+			if i > s.field {
+				y += extra
+			}
+			shared.PrintAt(screen, r.X+2, y, label, color)
+			x, width := r.X+2+len(label), r.W-4-len(label)
+			options := field.inputOptions()
+			style := tcell.StyleDefault.Foreground(color).Background(colors.Surface)
+			if focused {
+				s.editor(field.key, s.displayField(i)).Draw(screen, x, y, width, 1+extra, style, true, options)
+			} else {
+				input.Preview(screen, x, y, width, s.displayField(i), style, options)
+			}
 		}
 		hint := "<tab> field"
 		if fields[s.field].multiline {
@@ -71,7 +85,7 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	shared.PrintAt(screen, r.X+2, r.Y+2, "Destination (folder/name):", colors.Muted)
-	shared.PrintAt(screen, r.X+2, r.Y+3, shared.Truncate(s.storePath+"_", r.W-4), colors.Text)
+	s.editor("destination", s.storePath).Draw(screen, r.X+2, r.Y+3, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), true, input.Options{MaxBytes: fieldByteLimit})
 	if s.storeMessage != "" {
 		shared.PrintAt(screen, r.X+2, r.Y+5, shared.Truncate(s.storeMessage, r.W-4), colors.Warning)
 	} else if visible > 0 {

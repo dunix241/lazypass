@@ -2,6 +2,7 @@ package vault
 
 import (
 	"context"
+	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
@@ -18,6 +19,7 @@ type StoreDependencies struct {
 }
 
 type StoreForm struct {
+	editors              map[string]*input.Editor
 	entryType            vault.EntryType
 	choosingType         bool
 	extraFields          map[string]string

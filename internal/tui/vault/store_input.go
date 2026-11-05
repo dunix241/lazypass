@@ -52,21 +52,12 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.Close()
-	case tcell.KeyCtrlU:
-		s.storePath = ""
-		s.refreshStoreSuggestions()
-	case tcell.KeyCtrlW:
-		s.storePath = shared.DeletePreviousWord(s.storePath)
-		s.refreshStoreSuggestions()
 	case tcell.KeyUp:
 		s.storeSelected = max(0, s.storeSelected-1)
 	case tcell.KeyDown:
 		s.storeSelected = min(max(0, len(s.storeNodes)-1), s.storeSelected+1)
 	case tcell.KeyTAB:
 		s.insertStoreSuggestion()
-	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		s.storePath = shared.DeleteLastRune(s.storePath)
-		s.refreshStoreSuggestions()
 	case tcell.KeyEnter:
 		{
 			if strings.HasSuffix(s.storePath, "/") {
@@ -92,11 +83,8 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 			})
 			return
 		}
-	case tcell.KeyRune:
-		if event.Rune() >= ' ' {
-			s.storePath += string(event.Rune())
-			s.refreshStoreSuggestions()
-		}
+	default:
+		s.editInput(event)
 	}
 }
 
@@ -163,7 +151,6 @@ func (s *StoreForm) createFolder() {
 }
 
 func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
-	value := s.activeField()
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.Close()
@@ -179,35 +166,15 @@ func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
 		s.editingValue = false
 	case tcell.KeyTAB:
 		s.selectField((s.field + 1) % len(s.entryFields()))
-	case tcell.KeyCtrlU:
-		*value = ""
-	case tcell.KeyCtrlW:
-		*value = shared.DeletePreviousWord(*value)
-	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		*value = shared.DeleteLastRune(*value)
-	case tcell.KeyCtrlN:
-		if s.entryFields()[s.field].multiline && len(*value) < 64*1024 {
-			*value += "\n"
-		}
 	case tcell.KeyEnter:
 		if s.entryType == vault.LoginEntry && s.value == "" {
 			s.notify(shared.Warning, "Enter a value")
 			return
 		}
 		s.store()
-	case tcell.KeyRune:
-		if event.Rune() >= ' ' {
-			if len(*value)+len(string(event.Rune())) > 64*1024 {
-				s.notify(shared.Warning, "Value limit is 64 KiB")
-				return
-			}
-			*value += string(event.Rune())
-		}
+	default:
+		s.editInput(event)
 	}
-}
-
-func (s *StoreForm) activeField() *string {
-	return s.fieldValue(s.entryFields()[s.field].key)
 }
 
 func (s *StoreForm) moveEntryType(delta int) {

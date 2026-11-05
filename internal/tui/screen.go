@@ -61,6 +61,7 @@ type screen struct {
 }
 
 func (s *screen) Draw(screen tcell.Screen) {
+	screen.HideCursor()
 	s.notificationBounds = nil
 	s.drawnNotification = nil
 	x, y, width, height := s.GetRect()
