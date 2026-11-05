@@ -56,12 +56,7 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 	if available == right {
 		start = x + width - textWidth - 2
 	}
-	foreground, _, _ := presentation.Style.Decompose()
-	shared.PrintAt(screen, start, y, text, foreground)
-	for column := start; column < start+textWidth; column++ {
-		main, combining, _, _ := screen.GetContent(column, y)
-		screen.SetContent(column, y, main, combining, presentation.Style)
-	}
+	shared.PrintStyled(screen, start, y, text, presentation.Style)
 	if s.loggedNotification != message {
 		s.loggedNotification = message
 		if message.ID == "update" {

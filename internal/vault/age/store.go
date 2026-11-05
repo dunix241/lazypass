@@ -329,11 +329,11 @@ func (p *Provider) remove(ctx context.Context, path vault.Path, folder bool) err
 	if folder {
 		err = r.RemoveAll(name)
 	} else {
-		info, err := r.Lstat(name + ".age")
-		if errors.Is(err, os.ErrNotExist) {
+		info, statErr := r.Lstat(name + ".age")
+		if errors.Is(statErr, os.ErrNotExist) {
 			return vault.ErrNotFound
 		}
-		if err != nil {
+		if statErr != nil {
 			return vault.ErrUnavailable
 		}
 		if !info.Mode().IsRegular() {

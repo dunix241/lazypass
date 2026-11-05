@@ -69,11 +69,7 @@ func (s *View) drawAction(screen tcell.Screen, r rect, colors shared.Palette, f 
 	for column := r.x; column < r.x+r.w; column++ {
 		screen.SetContent(column, r.y, ' ', nil, style)
 	}
-	shared.PrintAt(screen, r.x+1, r.y, label, foreground)
-	for column := r.x; column < r.x+r.w; column++ {
-		main, combining, _, _ := screen.GetContent(column, r.y)
-		screen.SetContent(column, r.y, main, combining, style)
-	}
+	shared.PrintStyled(screen, r.x+1, r.y, label, style)
 }
 
 func (s *View) drawLength(screen tcell.Screen, r rect, colors shared.Palette) {

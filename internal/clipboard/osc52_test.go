@@ -12,7 +12,7 @@ import (
 )
 
 func TestOSC52PreservesBytesAndFramesClipboardSelection(t *testing.T) {
-	for _, text := range []string{"public-marker", "世界\n\x00\x1b", strings.Repeat("x", maxTerminalBytes)} {
+	for _, text := range []string{"public-marker", "🙂€\n\x00\x1b", strings.Repeat("x", maxTerminalBytes)} {
 		var output bytes.Buffer
 		if err := writeTerminalSequence(&output, text, false); err != nil {
 			t.Fatal(err)

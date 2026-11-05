@@ -33,7 +33,7 @@ func Builtins() Registry {
 			if entry.Server != "" {
 				u, err := url.Parse(entry.Server)
 				if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-					return nil, fmt.Errorf("Bitwarden server must be an HTTPS URL without credentials, query, or fragment")
+					return nil, fmt.Errorf("bitwarden server must be an HTTPS URL without credentials, query, or fragment")
 				}
 			}
 			dir := entry.StoreDir

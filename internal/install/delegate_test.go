@@ -41,15 +41,15 @@ func TestDelegateArgumentsAndVerification(t *testing.T) {
 	owner := Ownership{Executable: filepath.Join(dir, "lazypass"), Method: "manual"}
 	script := "#!/bin/sh\nprintf '%s\\n' \"$@\"\n"
 	var out bytes.Buffer
-	if err := delegate(context.Background(), owner, "v1.2.3", true, &out, io.Discard, fixtureClient(script, false)); err != nil {
+	if err := delegate(context.Background(), owner, "v1.2.3", &out, io.Discard, fixtureClient(script, false)); err != nil {
 		t.Fatal(err)
 	}
-	want := "--version\nv1.2.3\n--install-dir\n" + dir + "\n--adopt\n"
+	want := "--version\nv1.2.3\n--install-dir\n" + dir + "\n"
 	if out.String() != want {
 		t.Fatalf("argument boundaries: got %q, want %q", out.String(), want)
 	}
 	out.Reset()
-	if err := delegate(context.Background(), owner, "v1.2.3", true, &out, io.Discard, fixtureClient(script, true)); err == nil || out.Len() != 0 {
+	if err := delegate(context.Background(), owner, "v1.2.3", &out, io.Discard, fixtureClient(script, true)); err == nil || out.Len() != 0 {
 		t.Fatalf("unverified script executed: %q %v", out.String(), err)
 	}
 }
@@ -66,7 +66,7 @@ func TestDelegateCancellationCleansInstaller(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- delegate(ctx, Ownership{Executable: filepath.Join(dir, "lazypass"), Method: "script"}, "v1.0.0", false, io.Discard, io.Discard, fixtureClient(script, false))
+		done <- delegate(ctx, Ownership{Executable: filepath.Join(dir, "lazypass"), Method: "script"}, "v1.0.0", io.Discard, io.Discard, fixtureClient(script, false))
 	}()
 	deadline := time.After(5 * time.Second)
 	for {

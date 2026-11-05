@@ -19,8 +19,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), owner.Guidance)
 		return err
 	}
-	adopt, _ := cmd.Flags().GetBool("adopt")
-	if err := owner.ValidateUpdate(adopt); err != nil {
+	if err := owner.ValidateUpdate(); err != nil {
 		return err
 	}
 	release, err := (update.GitHub{}).Latest(cmd.Context())
@@ -38,7 +37,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Already up to date: %s\n", current)
 		return err
 	}
-	return install.Delegate(cmd.Context(), owner, release.Version, adopt, cmd.OutOrStdout(), cmd.ErrOrStderr())
+	return install.Delegate(cmd.Context(), owner, release.Version, cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
 func runUpdateCheck(cmd *cobra.Command, _ []string) error {

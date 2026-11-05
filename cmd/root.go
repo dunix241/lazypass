@@ -54,7 +54,6 @@ func usage(err error) error         { return &usageError{err: err} }
 
 func init() {
 	updateCommand := &cobra.Command{Use: "update", Short: "Update a standalone installation", Args: cobra.NoArgs, RunE: runUpdate}
-	updateCommand.Flags().Bool("adopt", false, "explicitly adopt an unmanaged executable")
 	updateCommand.AddCommand(&cobra.Command{Use: "check", Short: "Check for a newer stable release", Args: cobra.NoArgs, RunE: runUpdateCheck})
 	rootCmd.AddCommand(updateCommand)
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage(err) })
@@ -491,31 +490,6 @@ func vaultService(cmd *cobra.Command) (service.Service, error) {
 		return service.Service{}, vault.ErrUnavailable
 	}
 	return service.Service{Provider: p, Copy: clipboard.Copy}, nil
-}
-
-func vaultServiceForConfig(cfg config.Config) (service.Service, error) {
-	s, ok := configuredVaultService(cfg)
-	if !ok {
-		debug.Failure("vault setup cli", debug.Unavailable)
-		return service.Service{}, vault.ErrUnavailable
-	}
-	return s, nil
-}
-
-func configuredVaultService(cfg config.Config) (service.Service, bool) {
-	p, ok := configuredVault(cfg)
-	if !ok {
-		return service.Service{}, false
-	}
-	return service.Service{Provider: p, Copy: clipboard.Copy}, true
-}
-
-func configuredVault(cfg config.Config) (providers.Managed, bool) {
-	entry, ok := cfg.SelectedVault("")
-	if !ok {
-		return nil, false
-	}
-	return providerFor(entry)
 }
 
 func providerFor(entry config.Vault) (providers.Managed, bool) {

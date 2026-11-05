@@ -45,7 +45,7 @@ func TestCreatePublishesWithoutReplacingConcurrentEntry(t *testing.T) {
 	<-ready
 	close(release)
 	a, b := <-results, <-results
-	if !((a == nil && errors.Is(b, vault.ErrConflict)) || (b == nil && errors.Is(a, vault.ErrConflict))) {
+	if (a != nil || !errors.Is(b, vault.ErrConflict)) && (b != nil || !errors.Is(a, vault.ErrConflict)) {
 		t.Fatalf("expected one creation and one conflict: %v %v", a, b)
 	}
 	nodes, err := p.List(context.Background(), nil)

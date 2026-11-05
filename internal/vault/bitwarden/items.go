@@ -287,11 +287,12 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 		return err
 	}
 	payload := map[string]any{"type": bitwardenType(entry.Type), "name": entry.Path[len(entry.Path)-1], "folderId": id, "notes": entry.Notes}
-	if entry.Type == vault.LoginEntry {
+	switch entry.Type {
+	case vault.LoginEntry:
 		payload["login"] = map[string]any{"username": entry.Username, "password": entry.Password, "uris": []map[string]string{{"uri": entry.URL}}}
-	} else if entry.Type == vault.NoteEntry {
+	case vault.NoteEntry:
 		payload["secureNote"] = map[string]int{"type": 0}
-	} else {
+	default:
 		payload[typeObject(entry.Type)] = entry.Fields
 	}
 	_, err = p.submit(ctx, []string{"create", "item"}, payload)

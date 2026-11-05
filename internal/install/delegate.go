@@ -27,24 +27,22 @@ func Automatic(ctx context.Context, version string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if owner.Method != "script" || owner.ValidateUpdate(false) != nil {
+	if owner.Method != "script" || owner.ValidateUpdate() != nil {
 		return false, nil
 	}
 	if !update.Newer(version, owner.Release) {
 		return true, nil
 	}
-	return true, Delegate(ctx, owner, version, false, io.Discard, io.Discard)
+	return true, Delegate(ctx, owner, version, io.Discard, io.Discard)
 }
 
 // ValidateUpdate checks eligibility before any release downloads.
-func (o Ownership) ValidateUpdate(adopt bool) error {
+func (o Ownership) ValidateUpdate() error {
 	switch {
 	case runtime.GOOS != "linux" && runtime.GOOS != "darwin":
 		return errors.New("standalone updates require Linux or macOS; use your package manager or release download")
 	case o.Method == "package" || o.Method == "protected":
 		return errors.New(o.Guidance)
-	case o.Method != "script" && !adopt:
-		return fmt.Errorf("unrecognized installation at %s; use lazypass update --adopt to explicitly adopt it, or update using your original installation method", o.Executable)
 	case !filepath.IsAbs(o.Executable) || filepath.Base(o.Executable) != "lazypass":
 		return errors.New("standalone updates require an absolute executable path named lazypass")
 	}
@@ -53,8 +51,8 @@ func (o Ownership) ValidateUpdate(adopt bool) error {
 
 // Delegate verifies the release script before execution. The trust root is HTTPS
 // to GitHub; the accompanying checksum is not an independent signature.
-func Delegate(ctx context.Context, owner Ownership, version string, adopt bool, stdout, stderr io.Writer) error {
-	return delegate(ctx, owner, version, adopt, stdout, stderr, installerClient())
+func Delegate(ctx context.Context, owner Ownership, version string, stdout, stderr io.Writer) error {
+	return delegate(ctx, owner, version, stdout, stderr, installerClient())
 }
 
 func installerClient() *http.Client {
@@ -69,8 +67,8 @@ func installerClient() *http.Client {
 	}
 }
 
-func delegate(ctx context.Context, owner Ownership, version string, adopt bool, stdout, stderr io.Writer, client *http.Client) error {
-	if err := owner.ValidateUpdate(adopt); err != nil {
+func delegate(ctx context.Context, owner Ownership, version string, stdout, stderr io.Writer, client *http.Client) error {
+	if err := owner.ValidateUpdate(); err != nil {
 		return err
 	}
 	if !update.Stable(version) {
@@ -100,9 +98,6 @@ func delegate(ctx context.Context, owner Ownership, version string, adopt bool, 
 		return err
 	}
 	args := []string{path, "--version", version, "--install-dir", filepath.Dir(owner.Executable)}
-	if adopt {
-		args = append(args, "--adopt")
-	}
 	cmd := exec.CommandContext(ctx, "sh", args...)
 	configureCancellation(cmd)
 	cmd.Stdout, cmd.Stderr = stdout, stderr

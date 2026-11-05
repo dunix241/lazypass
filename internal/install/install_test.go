@@ -135,7 +135,7 @@ func TestStandaloneInstaller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"install-update", "quoted-path", "checksum", "duplicate", "malformed-checksum", "hash-failure", "symlink-archive", "package-owner", "query-failure", "unknown", "destination-symlink", "network"} {
+	for _, scenario := range []string{"install-update", "quoted-path", "checksum", "duplicate", "malformed-checksum", "hash-failure", "symlink-archive", "package-owner", "query-failure", "legacy-install", "destination-symlink", "network"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
 			dir, err := filepath.EvalSymlinks(dir)
@@ -206,8 +206,8 @@ case "$url" in *.tar.gz) cp "$FIXTURE/archive" "$out";; *sha256.txt) cp "$FIXTUR
 			}
 			target := filepath.Join(bin, "lazypass")
 			old := []byte("old binary survives failure")
-			success := scenario == "install-update" || scenario == "quoted-path"
-			if !success {
+			success := scenario == "install-update" || scenario == "quoted-path" || scenario == "legacy-install"
+			if scenario != "install-update" && scenario != "quoted-path" {
 				write(t, target, old, 0700)
 			}
 			if scenario == "destination-symlink" {
@@ -220,9 +220,6 @@ case "$url" in *.tar.gz) cp "$FIXTURE/archive" "$out";; *sha256.txt) cp "$FIXTUR
 			}
 			runInstall := func(version string) ([]byte, error) {
 				args := []string{script, "--version", version, "--install-dir", bin}
-				if !success && scenario != "unknown" {
-					args = append(args, "--adopt")
-				}
 				cmd := exec.Command("sh", args...)
 				cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"), "HOME="+dir, "XDG_STATE_HOME="+filepath.Join(dir, "state"), "FIXTURE="+dir, "FIXTURE_FAIL="+scenario)
 				return cmd.CombinedOutput()

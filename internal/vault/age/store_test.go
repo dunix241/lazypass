@@ -105,7 +105,7 @@ func TestConcurrentCreateAndContainment(t *testing.T) {
 	}
 	wg.Wait()
 	a, b := <-results, <-results
-	if !((a == nil && errors.Is(b, vault.ErrConflict)) || (b == nil && errors.Is(a, vault.ErrConflict))) {
+	if (a != nil || !errors.Is(b, vault.ErrConflict)) && (b != nil || !errors.Is(a, vault.ErrConflict)) {
 		t.Fatalf("concurrent create: %v %v", a, b)
 	}
 	outside := t.TempDir()

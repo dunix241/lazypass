@@ -88,8 +88,8 @@ X11. macOS and Windows use native clipboard tools.
 ### Updates
 
 Update a standalone installation with `lazypass update`. Package-managed
-installations show guidance for their package manager. To adopt a manually
-installed binary, run `lazypass update --adopt`.
+installations show guidance for their package manager. Rerun the installer
+command to upgrade an existing installation.
 
 Lazypass notifies you when a new release is available. Check manually with
 `lazypass update check`. Configure automatic behavior with:

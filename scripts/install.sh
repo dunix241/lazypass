@@ -17,7 +17,6 @@ Usage: sh install.sh [options]
 Options:
   --version vX.Y.Z   Install a specific stable release (default: latest)
   --install-dir DIR Install into an absolute directory (default: ~/.local/bin)
-  --adopt           Explicitly replace an unrecognized installation
   -h, --help        Show this help
 EOF
 }
@@ -25,7 +24,6 @@ EOF
 parse_args() {
     version=
     install_dir=
-    adopt=false
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -38,10 +36,6 @@ parse_args() {
                     --install-dir) install_dir=$2 ;;
                 esac
                 shift 2
-                ;;
-            --adopt)
-                adopt=true
-                shift
                 ;;
             -h | --help)
                 usage
@@ -241,8 +235,6 @@ check_existing_installation() {
 
     old_hash=$(sha256 "$target")
     read_installed_version
-    [ -n "$old_version" ] || [ "$adopt" = true ] ||
-        die 'existing installation is unrecognized; use --adopt to explicitly replace it'
 
     if [ -n "$old_version" ]; then
         if [ "$version" = "$old_version" ]; then
@@ -312,7 +304,7 @@ publish_installation() {
     mv -f "$binary_stage" "$target"
     binary_stage=
     mv -f "$receipt_stage" "$state_dir/install.json" ||
-        die 'binary installed, but receipt could not be saved; next update requires --adopt'
+        die 'binary installed, but receipt could not be saved; rerun the installer to repair it'
     receipt_stage=
 }
 

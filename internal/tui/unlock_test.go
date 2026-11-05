@@ -76,7 +76,7 @@ func TestUnlockInputUsesConsistentByteLimit(t *testing.T) {
 		t.Fatal("control characters accepted")
 	}
 	p.value = strings.Repeat("x", maxPassphraseBytes-1)
-	p.append("世")
+	p.append("€")
 	if len(p.value) != maxPassphraseBytes-1 {
 		t.Fatal("multibyte rune exceeded limit")
 	}

@@ -12,6 +12,16 @@ func PrintAt(screen tcell.Screen, x, y int, text string, color tcell.Color) {
 	tview.Print(screen, tview.Escape(text), x, y, len(text), tview.AlignLeft, color)
 }
 
+// PrintStyled writes literal graphemes with a complete style, including background
+// and attributes, without reading and rewriting existing screen cells.
+func PrintStyled(screen tcell.Screen, x, y int, text string, style tcell.Style) {
+	graphemes := uniseg.NewGraphemes(text)
+	for graphemes.Next() {
+		_, width := screen.Put(x, y, graphemes.Str(), style)
+		x += width
+	}
+}
+
 func Truncate(value string, width int) string {
 	if uniseg.StringWidth(value) <= width {
 		return value
