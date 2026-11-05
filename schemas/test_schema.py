@@ -17,8 +17,8 @@ class ConfigSchemaTest(unittest.TestCase):
     def test_valid_configs(self):
         configs = [
             {},
-            *({"updates": mode} for mode in ("off", "notify", "auto")),
-            {"updates": {"check": False}},
+            *({"updates": {"mode": mode}} for mode in ("off", "notify", "auto")),
+            {"updates": {"mode": "auto", "cacheMaxAge": "15m"}},
             {"length": 256, "theme": "my-custom-theme", "vaults": None},
             {"upper": False, "lower": False, "numbers": False, "symbols": True},
             {
@@ -35,6 +35,7 @@ class ConfigSchemaTest(unittest.TestCase):
         configs = [
             {"vault": {"provider": "pass"}},
             {"updates": "automatic"},
+            {"updates": {"mode": "auto", "cacheMaxAge": "tomorrow"}},
             {"updates": True},
             {"lenght": 20},
             {"length": 3},

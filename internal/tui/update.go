@@ -18,7 +18,7 @@ import (
 const updateStartupDelay = 3 * time.Second
 
 func (s *screen) updateTask() (task.Task, bool) {
-	mode := s.cfg.Updates
+	mode := s.cfg.Updates.Mode
 	if mode == config.UpdatesOff {
 		debug.Event("update skipped disabled")
 		return task.Task{}, false
@@ -28,7 +28,7 @@ func (s *screen) updateTask() (task.Task, bool) {
 		return task.Task{}, false
 	}
 	debug.Event("update scheduled")
-	checker := update.Checker{Source: update.GitHub{}, Store: state.UpdateStore{}, IncludeDismissed: mode == config.UpdatesAuto}
+	checker := update.Checker{Source: update.GitHub{}, Store: state.UpdateStore{}, IncludeDismissed: mode == config.UpdatesAuto, CacheMaxAge: s.cfg.Updates.CacheMaxAge}
 	return task.Task{ID: "update check", Delay: updateStartupDelay, Run: func(ctx context.Context) error {
 		runUpdateTask(ctx, mode, func(ctx context.Context) (update.Release, bool, error) {
 			return checker.Check(ctx, build.Version, false)

@@ -20,20 +20,28 @@ import (
 
 const releasesURL = "https://github.com/dunix241/lazypass/releases/download/"
 
-// Automatic installs only verified script-owned executables. Other installation
-// methods fall back to notification without adoption or elevated privileges.
+// Automatic follows the explicit updater's eligibility policy. The user's auto
+// setting permits standalone upgrades; package-managed paths remain protected.
 func Automatic(ctx context.Context, version string) (bool, error) {
 	owner, err := Detect(ctx)
 	if err != nil {
 		return false, err
 	}
-	if owner.Method != "script" || owner.ValidateUpdate() != nil {
+	return automatic(ctx, owner, version, Delegate)
+}
+
+func automatic(ctx context.Context, owner Ownership, version string,
+	install func(context.Context, Ownership, string, io.Writer, io.Writer) error) (bool, error) {
+	if owner.ValidateUpdate() != nil {
 		return false, nil
 	}
-	if !update.Newer(version, owner.Release) {
+	if !update.Stable(version) {
+		return false, errors.New("expected stable version vX.Y.Z")
+	}
+	if owner.Method == "script" && !update.Newer(version, owner.Release) {
 		return true, nil
 	}
-	return true, Delegate(ctx, owner, version, io.Discard, io.Discard)
+	return true, install(ctx, owner, version, io.Discard, io.Discard)
 }
 
 // ValidateUpdate checks eligibility before any release downloads.

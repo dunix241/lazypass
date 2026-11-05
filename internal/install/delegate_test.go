@@ -54,6 +54,31 @@ func TestDelegateArgumentsAndVerification(t *testing.T) {
 	}
 }
 
+func TestAutomaticStandaloneEligibility(t *testing.T) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("standalone updates")
+	}
+	for _, tc := range []struct {
+		name, method, release    string
+		wantAttempt, wantInstall bool
+	}{
+		{"legacy standalone", "manual", "", true, true},
+		{"script upgrade", "script", "v1.0.0", true, true},
+		{"already installed", "script", "v2.0.0", true, false},
+		{"package", "package", "", false, false},
+		{"protected", "protected", "", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			owner := Ownership{Executable: filepath.Join(t.TempDir(), "lazypass"), Method: tc.method, Release: tc.release, Guidance: "use package manager"}
+			attempted, err := automatic(context.Background(), owner, "v2.0.0", func(context.Context, Ownership, string, io.Writer, io.Writer) error { called = true; return nil })
+			if err != nil || attempted != tc.wantAttempt || called != tc.wantInstall {
+				t.Fatalf("attempted=%t installed=%t err=%v", attempted, called, err)
+			}
+		})
+	}
+}
+
 func TestDelegateCancellationCleansInstaller(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("POSIX cancellation")

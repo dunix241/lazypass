@@ -95,13 +95,19 @@ Lazypass notifies you when a new release is available. Check manually with
 `lazypass update check`. Configure automatic behavior with:
 
 ```yaml
-updates: notify
+updates:
+  mode: notify
+  cacheMaxAge: 1h
 ```
 
 Use `off` to disable automatic checks, `notify` (the default) for notifications,
-or `auto` to install updates automatically for installer-managed installations.
+or `auto` to install updates automatically for standalone installations.
 Other installation methods receive notifications. Restart lazypass after an
 automatic update to use the new version.
+
+`cacheMaxAge` controls how long a release lookup is reused across startups.
+Use a positive duration such as `15m`, `1h`, or `2h30m`. Checks run on TUI startup;
+manual update commands always fetch the latest release.
 
 ### Troubleshooting
 

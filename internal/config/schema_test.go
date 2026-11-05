@@ -70,7 +70,7 @@ func TestSavedConfigKeepsSchemaDirective(t *testing.T) {
 		if err := yaml.Unmarshal(data, &saved); err != nil {
 			t.Fatal(err)
 		}
-		if saved.Updates != UpdatesNotify {
+		if saved.Updates.Mode != UpdatesNotify {
 			t.Fatalf("config changed during save: %+v", saved)
 		}
 		cfg, err = Load(path)

@@ -79,10 +79,42 @@ func TestCacheDismissalAndExplicitChecks(t *testing.T) {
 	if err != nil || !available || source.calls != 2 {
 		t.Fatal("explicit check did not bypass cache/dismissal")
 	}
-	now = now.Add(Interval)
+	now = now.Add(DefaultCacheMaxAge)
 	_, _, _ = c.Check(context.Background(), "v1.0.0", false)
 	if source.calls != 3 {
 		t.Fatal("expired interval not checked")
+	}
+}
+
+func TestConfiguredCacheMaxAge(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, age := range []time.Duration{5 * time.Minute, time.Hour, 3 * time.Hour} {
+		t.Run(age.String(), func(t *testing.T) {
+			clock := now
+			source, store := &fakeSource{}, &memoryStore{}
+			checker := Checker{Source: source, Store: store, CacheMaxAge: age, Now: func() time.Time { return clock }}
+			check := func(force bool) {
+				t.Helper()
+				if _, _, err := checker.Check(context.Background(), "v1.0.0", force); err != nil {
+					t.Fatal(err)
+				}
+			}
+			check(false)
+			clock = now.Add(age - time.Nanosecond)
+			check(false)
+			if source.calls != 1 {
+				t.Fatal("cache expired early")
+			}
+			clock = now.Add(age)
+			check(false)
+			if source.calls != 2 {
+				t.Fatal("cache did not expire at max age")
+			}
+			check(true)
+			if source.calls != 3 {
+				t.Fatal("manual check did not bypass cache")
+			}
+		})
 	}
 }
 

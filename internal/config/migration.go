@@ -7,7 +7,7 @@ import (
 )
 
 // Legacy syntax is transformed before decoding the canonical configuration.
-func migrateVaultConfig(data []byte) (*yaml.Node, bool, error) {
+func migrateConfig(data []byte) (*yaml.Node, bool, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal(data, &document); err != nil {
 		return nil, false, err
@@ -41,14 +41,60 @@ func migrateVaultConfig(data []byte) (*yaml.Node, bool, error) {
 	}
 	// Also normalize the old mapping form under an already-renamed vaults key.
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value != "vaults" {
-			continue
-		}
 		value := root.Content[i+1]
-		if value.Kind == yaml.MappingNode {
-			root.Content[i+1] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{value}}
-			changed = true
+		switch root.Content[i].Value {
+		case "updates":
+			migrated, err := migrateUpdates(value)
+			if err != nil {
+				return nil, false, err
+			}
+			changed = changed || migrated
+		case "vaults":
+			if value.Kind == yaml.MappingNode {
+				root.Content[i+1] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{value}}
+				changed = true
+			}
 		}
 	}
 	return &document, changed, nil
+}
+
+func migrateUpdates(node *yaml.Node) (bool, error) {
+	settings := defaultUpdates()
+	switch node.Kind {
+	case yaml.ScalarNode:
+		if node.Tag != "!!str" {
+			return false, fmt.Errorf("updates must be a mapping")
+		}
+		if err := node.Decode(&settings.Mode); err != nil {
+			return false, err
+		}
+	case yaml.MappingNode:
+		if len(node.Content) != 2 || node.Content[0].Value != "check" {
+			return false, nil
+		}
+		var enabled bool
+		if err := node.Content[1].Decode(&enabled); err != nil {
+			return false, err
+		}
+		if node.Content[1].Tag != "!!bool" {
+			return false, fmt.Errorf("updates.check must be a boolean")
+		}
+		if !enabled {
+			settings.Mode = UpdatesOff
+		}
+	default:
+		return false, nil
+	}
+	var replacement yaml.Node
+	if err := replacement.Encode(settings); err != nil {
+		return false, err
+	}
+	if node.Kind == yaml.MappingNode {
+		replacement.Content[0].HeadComment = node.Content[0].HeadComment
+		replacement.Content[1].LineComment = node.Content[1].LineComment
+	}
+	replacement.HeadComment, replacement.LineComment, replacement.FootComment = node.HeadComment, node.LineComment, node.FootComment
+	*node = replacement
+	return true, nil
 }

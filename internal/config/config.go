@@ -19,19 +19,19 @@ import (
 
 // Config is the persisted form of generator.Options.
 type Config struct {
-	Updates          UpdateMode `yaml:"updates"`
-	Version          int        `yaml:"version"`
-	Length           int        `yaml:"length"`
-	Upper            bool       `yaml:"upper"`
-	Lower            bool       `yaml:"lower"`
-	Numbers          bool       `yaml:"numbers"`
-	Symbols          bool       `yaml:"symbols"`
-	SymbolSet        string     `yaml:"symbolSet"`
-	ExcludeAmbiguous bool       `yaml:"excludeAmbiguous"`
-	Theme            string     `yaml:"theme"`
-	NerdFont         bool       `yaml:"nerdFont"`
-	Vaults           Vaults     `yaml:"vaults"`
-	LastVault        string     `yaml:"-"` // Legacy read-only migration value.
+	Updates          Updates `yaml:"updates"`
+	Version          int     `yaml:"version"`
+	Length           int     `yaml:"length"`
+	Upper            bool    `yaml:"upper"`
+	Lower            bool    `yaml:"lower"`
+	Numbers          bool    `yaml:"numbers"`
+	Symbols          bool    `yaml:"symbols"`
+	SymbolSet        string  `yaml:"symbolSet"`
+	ExcludeAmbiguous bool    `yaml:"excludeAmbiguous"`
+	Theme            string  `yaml:"theme"`
+	NerdFont         bool    `yaml:"nerdFont"`
+	Vaults           Vaults  `yaml:"vaults"`
+	LastVault        string  `yaml:"-"` // Legacy read-only migration value.
 }
 
 func (c *Config) UnmarshalYAML(node *yaml.Node) error {
@@ -108,7 +108,7 @@ func (c Config) SelectedVault(name string) (Vault, bool) {
 func Defaults() Config {
 	d := generator.Defaults()
 	return Config{
-		Updates:          UpdatesNotify,
+		Updates:          defaultUpdates(),
 		Version:          1,
 		Length:           d.Length,
 		Upper:            d.Upper,
@@ -187,7 +187,7 @@ func load(path string) (Config, error) {
 		return Defaults(), err
 	}
 	c := Defaults()
-	document, migrated, err := migrateVaultConfig(data)
+	document, migrated, err := migrateConfig(data)
 	if err != nil {
 		debug.Failure("config parse", debug.Invalid)
 		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
@@ -223,7 +223,7 @@ func load(path string) (Config, error) {
 			return Defaults(), err
 		}
 		if err := replaceUnchanged(path, data, withSchemaDirective(updated)); err != nil {
-			return Defaults(), fmt.Errorf("migrate vault config: %w", err)
+			return Defaults(), fmt.Errorf("migrate config: %w", err)
 		}
 	}
 	return c, nil

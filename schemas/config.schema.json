@@ -11,18 +11,13 @@
       "default": 1
     },
     "updates": {
-      "description": "off disables automatic checks; notify shows available releases; auto installs updates for installer-managed installations. Explicit update commands remain available.",
-      "default": "notify",
-      "oneOf": [
-        { "type": "string", "enum": ["off", "notify", "auto"] },
-        {
-          "type": "object",
-          "description": "Legacy update setting. Prefer off, notify, or auto.",
-          "deprecated": true,
-          "additionalProperties": false,
-          "properties": { "check": { "type": "boolean", "default": true } }
-        }
-      ]
+      "description": "Automatic update behavior on TUI startup. Explicit update commands remain available.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "description": "off disables checks; notify shows releases; auto installs standalone updates.", "type": "string", "enum": ["off", "notify", "auto"], "default": "notify" },
+        "cacheMaxAge": { "description": "Maximum age of a cached release lookup. Positive Go duration, such as 15m, 2h, or 1h30m. Does not schedule recurring checks.", "type": "string", "pattern": "^(?:[0-9]+(?:\\.[0-9]+)?(?:ns|us|µs|μs|ms|s|m|h))+$", "default": "1h", "examples": ["15m", "1h", "2h30m"] }
+      }
     },
     "length": {
       "description": "Generated password length.",

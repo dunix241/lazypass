@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Interval = 24 * time.Hour
+const DefaultCacheMaxAge = time.Hour
 
 type Release struct {
 	Version string `yaml:"version"`
@@ -37,6 +37,7 @@ type Checker struct {
 	Store            Store
 	Now              func() time.Time
 	IncludeDismissed bool
+	CacheMaxAge      time.Duration
 }
 
 var stablePattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -88,7 +89,11 @@ func (c Checker) Check(ctx context.Context, current string, force bool) (Release
 	if err != nil {
 		return Release{}, false, err
 	}
-	if force || cache.CheckedAt.IsZero() || now.Sub(cache.CheckedAt) >= Interval || now.Before(cache.CheckedAt) {
+	maxAge := c.CacheMaxAge
+	if maxAge <= 0 {
+		maxAge = DefaultCacheMaxAge
+	}
+	if force || cache.CheckedAt.IsZero() || now.Sub(cache.CheckedAt) >= maxAge || now.Before(cache.CheckedAt) {
 		debug.Event("update source lookup")
 		cache.CheckedAt = now
 		// Persist the attempt even on failure; explicit checks may always retry.
