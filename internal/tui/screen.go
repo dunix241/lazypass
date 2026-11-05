@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"lazypass/internal/config"
+	"lazypass/internal/task"
 	generatorui "lazypass/internal/tui/generator"
 	"lazypass/internal/tui/notification"
 	"lazypass/internal/tui/shared"
@@ -38,6 +39,7 @@ type screen struct {
 	unlock               *unlockPrompt
 	running              bool
 	operationContext     context.Context
+	tasks                *task.Scheduler
 	*tview.Box
 	cfg                 config.Config
 	cfgPath             string

@@ -69,6 +69,12 @@ func TestCacheDismissalAndExplicitChecks(t *testing.T) {
 	if err != nil || available || source.calls != 1 {
 		t.Fatal("dismissal/cache ignored")
 	}
+	c.IncludeDismissed = true
+	_, available, err = c.Check(context.Background(), "v1.0.0", false)
+	if err != nil || !available || source.calls != 1 {
+		t.Fatal("automatic installation must include dismissed releases without bypassing cache")
+	}
+	c.IncludeDismissed = false
 	_, available, err = c.Check(context.Background(), "v1.0.0", true)
 	if err != nil || !available || source.calls != 2 {
 		t.Fatal("explicit check did not bypass cache/dismissal")

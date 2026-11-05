@@ -3,7 +3,7 @@ SVC_NAME := lazypass
 REPOSITORY := lazypass
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: build run tidy fmt fmt-check test test-cover lint snapshot release
+.PHONY: build run tidy fmt fmt-check shell-fmt shell-fmt-check shell-lint shell-check schema-check test test-cover lint snapshot release
 
 build:
 	mkdir -p $(BUILD_DIR)
@@ -34,6 +34,20 @@ test-cover:
 
 lint:
 	golangci-lint run
+
+shell-fmt:
+	shfmt -ln posix -i 4 -ci -w scripts/*.sh
+
+shell-fmt-check:
+	shfmt -ln posix -i 4 -ci -d scripts/*.sh
+
+shell-lint:
+	shellcheck --norc --shell=sh --severity=style scripts/*.sh
+
+shell-check: shell-fmt-check shell-lint
+
+schema-check:
+	python3 schemas/test_schema.py
 
 snapshot:
 	goreleaser release --snapshot --clean

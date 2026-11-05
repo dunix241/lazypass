@@ -22,7 +22,7 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		passwordLabelY, passwordY, meterY, lengthLabelY, charactersY = r.y+1, r.y+2, r.y+3, r.y+5, r.y+8
 	}
 	shared.PrintAt(screen, r.x+2, passwordLabelY, "PASSWORD", colors.Muted)
-	shared.PrintAt(screen, r.x+2, passwordY, shared.Truncate(s.password, max(12, r.w-33)), colors.Text)
+	shared.PrintAt(screen, r.x+2, passwordY, shared.Truncate(s.password, max(4, l.store.x-r.x-3)), colors.Text)
 	s.drawAction(screen, l.store, colors, focusStore, "+ Add")
 	if !l.compact {
 		s.drawAction(screen, l.regen, colors, focusRegen, "↻ Regenerate")
@@ -61,11 +61,19 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 }
 
 func (s *View) drawAction(screen tcell.Screen, r rect, colors shared.Palette, f focus, label string) {
-	color := colors.Muted
+	foreground, background := colors.Text, colors.Border
 	if s.selected == f {
-		color = colors.Focus
+		foreground, background = colors.Base, colors.Focus
 	}
-	shared.PrintAt(screen, r.x, r.y, label, color)
+	style := tcell.StyleDefault.Foreground(foreground).Background(background).Bold(true)
+	for column := r.x; column < r.x+r.w; column++ {
+		screen.SetContent(column, r.y, ' ', nil, style)
+	}
+	shared.PrintAt(screen, r.x+1, r.y, label, foreground)
+	for column := r.x; column < r.x+r.w; column++ {
+		main, combining, _, _ := screen.GetContent(column, r.y)
+		screen.SetContent(column, r.y, main, combining, style)
+	}
 }
 
 func (s *View) drawLength(screen tcell.Screen, r rect, colors shared.Palette) {

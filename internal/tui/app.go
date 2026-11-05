@@ -8,6 +8,7 @@ import (
 	"lazypass/internal/config"
 	"lazypass/internal/debug"
 	"lazypass/internal/generator"
+	"lazypass/internal/task"
 	"lazypass/internal/theme"
 	generatorui "lazypass/internal/tui/generator"
 	"lazypass/internal/tui/shared"
@@ -115,6 +116,19 @@ func (a *App) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.screen.operationContext = ctx
 	a.screen.running = true
+	jobs := task.New(ctx, task.Options{OnError: func(id string, _ error) {
+		debug.Failure(debug.Operation(id), debug.Unavailable)
+	}})
+	a.screen.tasks = jobs
+	defer func() {
+		cancel()
+		jobs.Close()
+		a.screen.stopNotificationTimer()
+		a.screen.closeVaults()
+	}()
+	if err := a.screen.scheduleTasks(jobs); err != nil {
+		return err
+	}
 	initialDraw := true
 	a.app.SetBeforeDrawFunc(func(tcell.Screen) bool {
 		if initialDraw {
@@ -125,26 +139,29 @@ func (a *App) Run() error {
 		}
 		return false
 	})
-	updatesScheduled := false
 	a.app.SetAfterDrawFunc(func(tcell.Screen) {
 		a.screen.scheduleNotification(ctx)
-		if !updatesScheduled {
-			updatesScheduled = true
-			a.screen.checkUpdates(ctx)
-		}
+		jobs.Ready()
 	})
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				a.screen.dispatch(ctx, func() { a.screen.vault.RefreshMetadata(ctx) })
-			}
-		}
-	}()
-	defer func() { cancel(); a.screen.stopNotificationTimer(); a.screen.closeVaults() }()
 	return a.app.Run()
+}
+
+func (s *screen) scheduleTasks(jobs *task.Scheduler) error {
+	path := s.cfgPath
+	tasks := []task.Task{
+		{ID: "config schema sync", Run: func(ctx context.Context) error { return config.SyncSchema(ctx, path) }},
+		{ID: "vault metadata refresh", Delay: 2 * time.Second, Interval: 2 * time.Second, Run: func(ctx context.Context) error {
+			s.dispatch(ctx, func() { s.vault.RefreshMetadata(ctx) })
+			return nil
+		}},
+	}
+	if job, ok := s.updateTask(); ok {
+		tasks = append(tasks, job)
+	}
+	for _, job := range tasks {
+		if _, err := jobs.OnReady(job); err != nil {
+			return fmt.Errorf("schedule %s: %w", job.ID, err)
+		}
+	}
+	return nil
 }

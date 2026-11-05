@@ -22,12 +22,12 @@ func calculateLayout(frame shared.Frame) layout {
 		lengthY--
 		toggleY--
 	}
-	l.store = rect{cardX + cardW - 15, actionY, 5, 1}
+	l.store = rect{cardX + cardW - 18, actionY, 7, 1}
 	if !l.compact {
-		l.store = rect{cardX + cardW - 29, actionY, 5, 1}
-		l.regen = rect{cardX + cardW - 22, actionY, 12, 1}
+		l.store = rect{cardX + cardW - 33, actionY, 7, 1}
+		l.regen = rect{cardX + cardW - 25, actionY, 14, 1}
 	}
-	l.copy = rect{cardX + cardW - 8, actionY, 6, 1}
+	l.copy = rect{cardX + cardW - 10, actionY, 8, 1}
 	l.length = rect{cardX + 2, lengthY, cardW - 4, 1}
 	if l.compact {
 		l.upper = rect{cardX + 2, cardY + 10, cardW - 4, 1}

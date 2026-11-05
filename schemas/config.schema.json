@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "lazypass configuration",
+  "description": "Password generation, appearance, vaults, and update preferences.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Configuration format version.",
+      "type": "integer",
+      "default": 1
+    },
+    "updates": {
+      "description": "off disables automatic checks; notify shows available releases; auto installs updates for installer-managed installations. Explicit update commands remain available.",
+      "default": "notify",
+      "oneOf": [
+        { "type": "string", "enum": ["off", "notify", "auto"] },
+        {
+          "type": "object",
+          "description": "Legacy update setting. Prefer off, notify, or auto.",
+          "deprecated": true,
+          "additionalProperties": false,
+          "properties": { "check": { "type": "boolean", "default": true } }
+        }
+      ]
+    },
+    "length": {
+      "description": "Generated password length.",
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 256,
+      "default": 20
+    },
+    "upper": { "description": "Include uppercase letters.", "type": "boolean", "default": true },
+    "lower": { "description": "Include lowercase letters.", "type": "boolean", "default": true },
+    "numbers": { "description": "Include digits.", "type": "boolean", "default": true },
+    "symbols": { "description": "Include characters from symbolSet.", "type": "boolean", "default": false },
+    "symbolSet": {
+      "description": "Available symbol characters. An empty value uses the default set.",
+      "type": "string",
+      "default": "!@#$%^&*()-_=+[]{}<>?"
+    },
+    "excludeAmbiguous": {
+      "description": "Exclude visually ambiguous characters: I, l, 1, O, and 0.",
+      "type": "boolean",
+      "default": false
+    },
+    "theme": {
+      "description": "Built-in or custom theme name.",
+      "type": "string",
+      "default": "midnight-rose",
+      "examples": ["midnight-rose", "nord", "mono", "gruvbox", "catppuccin-mocha", "onedark", "dracula"]
+    },
+    "nerdFont": { "description": "Use Nerd Font icons; disable for plain-text labels.", "type": "boolean", "default": true },
+    "vaults": {
+      "description": "Named vault connections. Names must be unique.",
+      "type": ["array", "null"],
+      "items": { "$ref": "#/definitions/vault" }
+    },
+    "lastVault": { "description": "Legacy selection; now stored separately by lazypass.", "deprecated": true, "type": "string" }
+  },
+  "not": {
+    "required": ["upper", "lower", "numbers"],
+    "properties": {
+      "upper": { "const": false },
+      "lower": { "const": false },
+      "numbers": { "const": false },
+      "symbols": { "const": false }
+    }
+  },
+  "definitions": {
+    "vault": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "description": "Unique vault name. Defaults to the provider name when omitted.", "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "provider": { "description": "Vault backend.", "type": "string", "enum": ["age", "pass", "bitwarden"] },
+        "storeDir": { "description": "Vault storage directory; for Bitwarden, its isolated CLI data directory.", "type": "string" },
+        "identityFile": { "description": "age identity file, stored outside the vault directory.", "type": "string" },
+        "server": { "description": "Bitwarden or Vaultwarden server URL.", "type": "string", "examples": ["https://vault.bitwarden.com"] }
+      }
+    }
+  }
+}

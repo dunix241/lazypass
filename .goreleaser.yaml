@@ -26,6 +26,14 @@ archives:
 checksum:
   name_template: "{{ .ProjectName }}_checksum_sha256.txt"
   algorithm: sha256
+  extra_files:
+    - glob: scripts/install.sh
+    - glob: schemas/config.schema.json
+
+release:
+  extra_files:
+    - glob: scripts/install.sh
+    - glob: schemas/config.schema.json
 
 changelog:
   sort: asc

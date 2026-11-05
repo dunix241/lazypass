@@ -20,11 +20,12 @@ for next time.
 ## Install
 
 ```sh
-mkdir -p ~/.local/bin && OS=$(uname -s) && ARCH=$(uname -m | sed 's/aarch64/arm64/') && curl -fsSL "https://github.com/dunix241/lazypass/releases/latest/download/lazypass_${OS}_${ARCH}.tar.gz" | tar -xz -C ~/.local/bin lazypass
+curl -fsSL https://github.com/dunix241/lazypass/releases/latest/download/install.sh | sh
 ```
 
-Make sure `~/.local/bin` is on your `PATH`. Prebuilt releases support Linux,
-macOS, and Windows. To build from source, run `make build`; the binary is
+The installer supports Linux and macOS and installs into `~/.local/bin`.
+Windows binaries are available on the [releases page](https://github.com/dunix241/lazypass/releases/latest).
+To build from source, run `make build`; the binary is
 written to `.build/lazypass`.
 
 ## Usage
@@ -86,13 +87,21 @@ X11. macOS and Windows use native clipboard tools.
 
 ### Updates
 
+Update a standalone installation with `lazypass update`. Package-managed
+installations show guidance for their package manager. To adopt a manually
+installed binary, run `lazypass update --adopt`.
+
 Lazypass notifies you when a new release is available. Check manually with
-`lazypass update check`. To disable update notifications, set:
+`lazypass update check`. Configure automatic behavior with:
 
 ```yaml
-updates:
-  check: false
+updates: notify
 ```
+
+Use `off` to disable automatic checks, `notify` (the default) for notifications,
+or `auto` to install updates automatically for installer-managed installations.
+Other installation methods receive notifications. Restart lazypass after an
+automatic update to use the new version.
 
 ### Troubleshooting
 

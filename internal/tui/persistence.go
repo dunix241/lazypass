@@ -22,7 +22,7 @@ func (s *screen) saveOptions(options generator.Options) error {
 	if s.cfgPath == "" {
 		return nil
 	}
-	return s.updateConfig(func(current config.Config) config.Config { return current.WithOptions(options) })
+	return s.updateConfig(func(current *config.Config) { *current = current.WithOptions(options) })
 }
 
 // The deleted theme must stop being the live selection even if persistence fails.
@@ -36,16 +36,12 @@ func (s *screen) saveTheme(name string) error {
 		s.cfg.Theme = name
 		return nil
 	}
-	return s.updateConfig(func(current config.Config) config.Config { current.Theme = name; return current })
+	return s.updateConfig(func(current *config.Config) { current.Theme = name })
 }
 
-func (s *screen) updateConfig(update func(config.Config) config.Config) error {
-	current, err := config.Load(s.cfgPath)
+func (s *screen) updateConfig(change func(*config.Config)) error {
+	current, err := config.Update(s.cfgPath, change)
 	if err != nil {
-		return err
-	}
-	current = update(current)
-	if err := current.Save(s.cfgPath); err != nil {
 		return err
 	}
 	current.LastVault = s.cfg.LastVault

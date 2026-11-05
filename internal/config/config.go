@@ -2,7 +2,6 @@
 package config
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -20,23 +19,19 @@ import (
 
 // Config is the persisted form of generator.Options.
 type Config struct {
-	Updates          Updates `yaml:"updates"`
-	Version          int     `yaml:"version"`
-	Length           int     `yaml:"length"`
-	Upper            bool    `yaml:"upper"`
-	Lower            bool    `yaml:"lower"`
-	Numbers          bool    `yaml:"numbers"`
-	Symbols          bool    `yaml:"symbols"`
-	SymbolSet        string  `yaml:"symbolSet"`
-	ExcludeAmbiguous bool    `yaml:"excludeAmbiguous"`
-	Theme            string  `yaml:"theme"`
-	NerdFont         bool    `yaml:"nerdFont"`
-	Vaults           Vaults  `yaml:"vaults"`
-	LastVault        string  `yaml:"-"` // Legacy read-only migration value.
-}
-
-type Updates struct {
-	Check bool `yaml:"check"`
+	Updates          UpdateMode `yaml:"updates"`
+	Version          int        `yaml:"version"`
+	Length           int        `yaml:"length"`
+	Upper            bool       `yaml:"upper"`
+	Lower            bool       `yaml:"lower"`
+	Numbers          bool       `yaml:"numbers"`
+	Symbols          bool       `yaml:"symbols"`
+	SymbolSet        string     `yaml:"symbolSet"`
+	ExcludeAmbiguous bool       `yaml:"excludeAmbiguous"`
+	Theme            string     `yaml:"theme"`
+	NerdFont         bool       `yaml:"nerdFont"`
+	Vaults           Vaults     `yaml:"vaults"`
+	LastVault        string     `yaml:"-"` // Legacy read-only migration value.
 }
 
 func (c *Config) UnmarshalYAML(node *yaml.Node) error {
@@ -46,22 +41,13 @@ func (c *Config) UnmarshalYAML(node *yaml.Node) error {
 		return err
 	}
 	*c = Config(decoded)
-	var legacyVault *yaml.Node
-	hasVaults := false
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		switch node.Content[i].Value {
 		case "lastVault":
 			if err := node.Content[i+1].Decode(&c.LastVault); err != nil {
 				return err
 			}
-		case "vaults":
-			hasVaults = true
-		case "vault":
-			legacyVault = node.Content[i+1]
 		}
-	}
-	if !hasVaults && legacyVault != nil {
-		return legacyVault.Decode(&c.Vaults)
 	}
 	return nil
 }
@@ -85,19 +71,6 @@ func ValidateVaultName(name string) error {
 }
 
 func (v *Vaults) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.MappingNode {
-		var legacy Vault
-		if err := node.Decode(&legacy); err != nil {
-			return err
-		}
-		if legacy.Provider != "" {
-			if legacy.Name == "" {
-				legacy.Name = legacy.Provider
-			}
-			*v = Vaults{legacy}
-		}
-		return nil
-	}
 	type plain Vaults
 	var decoded plain
 	if err := node.Decode(&decoded); err != nil {
@@ -135,7 +108,7 @@ func (c Config) SelectedVault(name string) (Vault, bool) {
 func Defaults() Config {
 	d := generator.Defaults()
 	return Config{
-		Updates:          Updates{Check: true},
+		Updates:          UpdatesNotify,
 		Version:          1,
 		Length:           d.Length,
 		Upper:            d.Upper,
@@ -192,6 +165,12 @@ func ResolvePath(explicit string) (string, error) {
 // Load returns defaults for a missing file. Invalid existing files are left
 // untouched and reported to the caller so user settings are never replaced.
 func Load(path string) (Config, error) {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	return load(path)
+}
+
+func load(path string) (Config, error) {
 	if path == "" {
 		p, err := DefaultPath()
 		if err != nil {
@@ -208,7 +187,12 @@ func Load(path string) (Config, error) {
 		return Defaults(), err
 	}
 	c := Defaults()
-	if err := yaml.Unmarshal(data, &c); err != nil {
+	document, migrated, err := migrateVaultConfig(data)
+	if err != nil {
+		debug.Failure("config parse", debug.Invalid)
+		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
+	}
+	if err := document.Decode(&c); err != nil {
 		debug.Failure("config parse", debug.Invalid)
 		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
@@ -233,11 +217,26 @@ func Load(path string) (Config, error) {
 		debug.Failure("config validate", debug.Invalid)
 		return Defaults(), fmt.Errorf("invalid config %q: %w", path, err)
 	}
+	if migrated {
+		updated, err := encodeYAML(document)
+		if err != nil {
+			return Defaults(), err
+		}
+		if err := replaceUnchanged(path, data, withSchemaDirective(updated)); err != nil {
+			return Defaults(), fmt.Errorf("migrate vault config: %w", err)
+		}
+	}
 	return c, nil
 }
 
 // Save writes atomically (tmp + rename) with 0600 permissions.
 func (c Config) Save(path string) error {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	return c.save(path)
+}
+
+func (c Config) save(path string) error {
 	if path == "" {
 		p, err := DefaultPath()
 		if err != nil {
@@ -245,18 +244,12 @@ func (c Config) Save(path string) error {
 		}
 		path = p
 	}
-	var data bytes.Buffer
-	encoder := yaml.NewEncoder(&data)
-	encoder.SetIndent(2)
-	if err := encoder.Encode(c); err != nil {
+	data, err := encodeYAML(c)
+	if err != nil {
 		debug.Failure("config encode", debug.Invalid)
 		return err
 	}
-	if err := encoder.Close(); err != nil {
-		debug.Failure("config encode", debug.IO)
-		return err
-	}
-	if err := util.WritePrivateFile(path, data.Bytes()); err != nil {
+	if err := util.WritePrivateFile(path, withSchemaDirective(data)); err != nil {
 		debug.Failure("config save file", debug.IO)
 		return err
 	}

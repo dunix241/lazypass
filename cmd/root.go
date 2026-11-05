@@ -53,7 +53,8 @@ func (e *usageError) Unwrap() error { return e.err }
 func usage(err error) error         { return &usageError{err: err} }
 
 func init() {
-	updateCommand := &cobra.Command{Use: "update", Short: "Inspect available releases"}
+	updateCommand := &cobra.Command{Use: "update", Short: "Update a standalone installation", Args: cobra.NoArgs, RunE: runUpdate}
+	updateCommand.Flags().Bool("adopt", false, "explicitly adopt an unmanaged executable")
 	updateCommand.AddCommand(&cobra.Command{Use: "check", Short: "Check for a newer stable release", Args: cobra.NoArgs, RunE: runUpdateCheck})
 	rootCmd.AddCommand(updateCommand)
 	rootCmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return usage(err) })

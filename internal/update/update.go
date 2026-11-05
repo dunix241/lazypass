@@ -33,9 +33,10 @@ type Store interface {
 }
 
 type Checker struct {
-	Source Source
-	Store  Store
-	Now    func() time.Time
+	Source           Source
+	Store            Store
+	Now              func() time.Time
+	IncludeDismissed bool
 }
 
 var stablePattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
@@ -121,7 +122,7 @@ func (c Checker) Check(ctx context.Context, current string, force bool) (Release
 	} else {
 		debug.Event("update cached result")
 	}
-	available := Newer(cache.Release.Version, current) && (force || cache.Dismissed != cache.Release.Version)
+	available := Newer(cache.Release.Version, current) && (force || c.IncludeDismissed || cache.Dismissed != cache.Release.Version)
 	return cache.Release, available, nil
 }
 
