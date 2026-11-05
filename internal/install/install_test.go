@@ -34,6 +34,10 @@ func TestOwnership(t *testing.T) {
 	binary := filepath.Join(dir, "lazypass")
 	data := []byte("fixture binary")
 	write(t, binary, data, 0700)
+	binary, err := filepath.EvalSymlinks(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
 	hash := sha256.Sum256(data)
 	receipt := Receipt{Version: 1, Method: "script", Executable: binary, Release: "v1.0.0", SHA256: hex.EncodeToString(hash[:])}
 	raw, _ := json.Marshal(receipt)
@@ -134,9 +138,24 @@ func TestStandaloneInstaller(t *testing.T) {
 	for _, scenario := range []string{"install-update", "quoted-path", "checksum", "duplicate", "malformed-checksum", "hash-failure", "symlink-archive", "package-owner", "query-failure", "unknown", "destination-symlink", "network"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
+			dir, err := filepath.EvalSymlinks(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
 			tools := filepath.Join(dir, "tools")
 			if err := os.Mkdir(tools, 0700); err != nil {
 				t.Fatal(err)
+			}
+			fixtureOS := map[string]string{"linux": "Linux", "darwin": "Darwin"}[runtime.GOOS]
+			fixtureArch := map[string]string{"amd64": "x86_64", "arm64": "arm64"}[runtime.GOARCH]
+			if scenario == "package-owner" || scenario == "query-failure" {
+				fixtureOS = "Linux"
+				write(t, filepath.Join(tools, "uname"), []byte(fmt.Sprintf(`#!/bin/sh
+case "$1" in
+    -s) printf 'Linux\n' ;;
+    -m) printf '%s\n' ;;
+esac
+`, fixtureArch)), 0700)
 			}
 			// Intercept downloads, retaining production URL and TLS arguments.
 			write(t, filepath.Join(tools, "curl"), []byte(`#!/bin/sh
@@ -170,7 +189,7 @@ case "$url" in *.tar.gz) cp "$FIXTURE/archive" "$out";; *sha256.txt) cp "$FIXTUR
 			if scenario == "checksum" {
 				hash = [32]byte{}
 			}
-			checks := fmt.Sprintf("%x  lazypass_%s_%s.tar.gz\n", hash, map[string]string{"linux": "Linux", "darwin": "Darwin"}[runtime.GOOS], map[string]string{"amd64": "x86_64", "arm64": "arm64"}[runtime.GOARCH])
+			checks := fmt.Sprintf("%x  lazypass_%s_%s.tar.gz\n", hash, fixtureOS, fixtureArch)
 			if scenario == "duplicate" {
 				checks += checks
 			}

@@ -30,7 +30,9 @@ parse_args() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --version | --install-dir)
-                [ "$#" -ge 2 ] && [ -n "$2" ] || die "missing value for $1"
+                if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                    die "missing value for $1"
+                fi
                 case "$1" in
                     --version) version=$2 ;;
                     --install-dir) install_dir=$2 ;;
@@ -287,8 +289,9 @@ extract_binary() {
 check_destination_unchanged() {
     [ ! -L "$target" ] || die 'destination changed during installation'
     if [ -n "$old_hash" ]; then
-        [ -f "$target" ] && [ "$(sha256 "$target")" = "$old_hash" ] ||
+        if [ ! -f "$target" ] || [ "$(sha256 "$target")" != "$old_hash" ]; then
             die 'destination changed during installation'
+        fi
     else
         [ ! -e "$target" ] || die 'destination appeared during installation'
     fi
