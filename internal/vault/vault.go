@@ -181,6 +181,12 @@ type Diagnostic interface {
 	UserMessage() string
 }
 
+// RecoveryCommand supplies a non-secret command for an explicit clipboard action.
+type RecoveryCommand interface {
+	Diagnostic
+	RecoveryCommand() string
+}
+
 type Provider interface {
 	Name() string
 	Capabilities() Capabilities

@@ -2,8 +2,10 @@ package vault
 
 import (
 	"context"
+	"errors"
 
 	"lazypass/internal/tui/shared"
+	"lazypass/internal/vault"
 )
 
 func (s *View) refreshProvider() {
@@ -21,6 +23,16 @@ func (s *View) refreshProvider() {
 	}, func(err error) {
 		s.refreshing = false
 		if err != nil {
+			var recovery vault.RecoveryCommand
+			if s.deps.NotifyRecovery != nil && errors.As(err, &recovery) {
+				s.deps.NotifyRecovery(recovery.UserMessage(), recovery.RecoveryCommand())
+				return
+			}
+			var diagnostic vault.Diagnostic
+			if errors.As(err, &diagnostic) {
+				s.notify(shared.Warning, diagnostic.UserMessage())
+				return
+			}
 			s.notify(shared.Error, "Unable to refresh vault")
 			return
 		}

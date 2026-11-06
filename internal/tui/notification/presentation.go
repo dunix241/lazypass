@@ -29,7 +29,12 @@ func Format(message Message, fallback tcell.Style) Presentation {
 		if i >= 11 {
 			break
 		}
-		fmt.Fprintf(&text, " · F%d %s", i+2, action.Label)
+		if i == 0 {
+			text.WriteByte('\n')
+		} else {
+			text.WriteString(" · ")
+		}
+		fmt.Fprintf(&text, "F%d %s", i+2, action.Label)
 	}
 	return Presentation{Text: text.String(), Style: fallback}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -61,12 +62,12 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 	}
 }
 
-func TestBuiltInPromptPrecedesCLIStatusAndIsNotReused(t *testing.T) {
+func TestBuiltInPromptChecksStatusBeforeUnlockAndIsNotReused(t *testing.T) {
 	r := &fakeRunner{}
 	p := New(t.TempDir(), "", nil, r)
 	ctx := vault.WithPassphrasePrompt(context.Background(), func(context.Context) (string, error) {
-		if r.calls != 0 {
-			t.Error("CLI work delayed built-in prompt")
+		if r.calls != 1 {
+			t.Error("prompt must follow status and precede entry loading")
 		}
 		return "fixture", nil
 	})
@@ -79,6 +80,29 @@ func TestBuiltInPromptPrecedesCLIStatusAndIsNotReused(t *testing.T) {
 	ctx = vault.WithPassphrasePrompt(context.Background(), func(context.Context) (string, error) { t.Error("unlocked session prompted again"); return "", nil })
 	if _, err := p.List(ctx, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+type signedOutRunner struct{ fakeRunner }
+
+func (r *signedOutRunner) Run(ctx context.Context, args []string, input io.Reader, env []string) ([]byte, error) {
+	if strings.Join(args, " ") == "status" {
+		return []byte(`{"status":"unauthenticated","serverUrl":"https://vault.bitwarden.com"}`), nil
+	}
+	return r.fakeRunner.Run(ctx, args, input, env)
+}
+
+func TestSignedOutNeverRequestsPassphrase(t *testing.T) {
+	p := New(t.TempDir(), "", func() (string, error) { t.Error("signed-out account prompted"); return "", nil }, &signedOutRunner{})
+	for range 2 {
+		_, err := p.List(context.Background(), nil)
+		if !errors.Is(err, vault.ErrUninitialized) {
+			t.Fatalf("wrong state: %v", err)
+		}
+		var diagnostic vault.Diagnostic
+		if !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.UserMessage(), "bw login") || !strings.Contains(diagnostic.UserMessage(), p.DataDir) {
+			t.Fatal("missing relogin guidance")
+		}
 	}
 }
 

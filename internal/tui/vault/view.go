@@ -9,17 +9,18 @@ import (
 )
 
 type Dependencies struct {
-	Context      func() context.Context
-	Cache        *browsercache.Store
-	RunOperation OperationRunner
-	Name         string
-	Service      service.Service
-	RunPrompted  PromptRunner
-	Notify       func(shared.Level, string)
-	OpenThemes   func()
-	OpenAdd      func()
-	OpenEdit     func(vault.Path)
-	Dispatch     func(context.Context, func())
+	NotifyRecovery func(string, string)
+	Context        func() context.Context
+	Cache          *browsercache.Store
+	RunOperation   OperationRunner
+	Name           string
+	Service        service.Service
+	RunPrompted    PromptRunner
+	Notify         func(shared.Level, string)
+	OpenThemes     func()
+	OpenAdd        func()
+	OpenEdit       func(vault.Path)
+	Dispatch       func(context.Context, func())
 }
 
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }

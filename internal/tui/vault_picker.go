@@ -40,10 +40,15 @@ func (s *screen) activateVault(index int) {
 			RunPrompted:  s.runPrompted,
 			RunOperation: s.operationRunner(selected.Service.Provider),
 			Notify:       notify,
-			OpenThemes:   s.openThemePanel,
-			OpenAdd:      s.openVaultAdd,
-			OpenEdit:     s.openVaultEdit,
-			Dispatch:     s.dispatch,
+			NotifyRecovery: func(message, command string) {
+				if s.vaultIndex == index {
+					s.notifyRecovery(message, command)
+				}
+			},
+			OpenThemes: s.openThemePanel,
+			OpenAdd:    s.openVaultAdd,
+			OpenEdit:   s.openVaultEdit,
+			Dispatch:   s.dispatch,
 		})
 	}
 	s.vault = s.vaultViews[index]

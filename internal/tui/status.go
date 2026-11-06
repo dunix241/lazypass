@@ -1,13 +1,16 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/uniseg"
+	"lazypass/internal/clipboard"
 	"lazypass/internal/debug"
+	"lazypass/internal/task"
 	"lazypass/internal/tui/notification"
 	"lazypass/internal/tui/shared"
 )
@@ -22,7 +25,41 @@ const (
 )
 
 func (s *screen) notify(level notificationLevel, text string) {
-	s.notifications.Show(notification.Message{ID: "operation", Text: text, Level: level}, time.Now())
+	s.notifyWithDuration(level, text, 0)
+}
+
+func (s *screen) notifyWithDuration(level notificationLevel, text string, duration time.Duration) {
+	minimum := 3 * time.Second
+	if level == shared.Warning || level == shared.Error {
+		minimum = 8 * time.Second
+	}
+	s.notifications.Show(notification.Message{ID: "operation", Text: text, Level: level, Duration: duration,
+		DurationMode: notification.DynamicDuration, ReadingTime: &notification.ReadingTime{Minimum: minimum}}, time.Now())
+}
+
+func (s *screen) notifyRecovery(text, command string) {
+	s.notifications.Show(notification.Message{ID: "vault recovery", Text: text, Level: shared.Warning, Duration: -1,
+		Actions: []notification.Action{{Label: "copy login command", KeepOpen: true, Run: func() {
+			if s.tasks == nil {
+				return
+			}
+			_, err := s.tasks.Submit(task.Task{ID: "copy recovery command", Run: func(ctx context.Context) error {
+				err := clipboard.Copy(command)
+				s.dispatch(ctx, func() {
+					if err != nil {
+						s.notify(shared.Error, "Could not copy login command")
+					} else {
+						s.notifications.Remove("vault recovery", time.Now())
+						s.notify(shared.Success, "Login command copied; run it in your terminal, then refresh")
+					}
+				})
+				return nil
+			}})
+			if err != nil && err != task.ErrDuplicate {
+				debug.Failure("recovery copy schedule", debug.Unavailable)
+			}
+		}}, {Label: "dismiss"}},
+	}, time.Now())
 }
 
 func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, width int) {
@@ -32,31 +69,32 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 	if message == nil {
 		return
 	}
-	right, left := width-logo.right()-3, logo.x-2
-	available, start := right, x+logo.right()+1
-	if right <= 0 {
-		available, start = left, x+1
-	}
+	available, offset, alignRight := notificationSpace(logo, width)
+	start := x + offset
 	if available <= 0 {
 		return
 	}
 	fallback := tcell.StyleDefault.Foreground(s.notificationColor(message.Level)).Background(s.colors.Base).Bold(true)
 	presentation := notification.Format(*message, fallback)
-	text := strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return ' '
-		}
-		return r
-	}, presentation.Text)
-	text = shared.Truncate(text, available)
-	textWidth := uniseg.StringWidth(text)
-	if textWidth == 0 {
+	_, _, _, height := s.GetRect()
+	lines := notificationLines(presentation.Text, available, height)
+	if len(lines) == 0 {
 		return
 	}
-	if available == right {
-		start = x + width - textWidth - 2
+	if alignRight {
+		blockWidth := 0
+		for _, line := range lines {
+			blockWidth = max(blockWidth, uniseg.StringWidth(line))
+		}
+		start = x + width - blockWidth - 2
 	}
-	shared.PrintStyled(screen, start, y, text, presentation.Style)
+	for row, line := range lines {
+		textWidth := uniseg.StringWidth(line)
+		shared.PrintStyled(screen, start, y+row, line, presentation.Style)
+		if len(message.Actions) > 0 {
+			s.notificationBounds = append(s.notificationBounds, shared.Rect{X: start, Y: y + row, W: textWidth, H: 1})
+		}
+	}
 	if s.loggedNotification != message {
 		s.loggedNotification = message
 		if message.ID == "update" {
@@ -64,10 +102,43 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 		}
 	}
 	s.drawnNotification = message
-	// A click activates the first action; additional actions use F3, F4, etc.
-	if len(message.Actions) > 0 {
-		s.notificationBounds = []shared.Rect{{X: start, Y: y, W: textWidth, H: 1}}
+}
+
+func notificationSpace(logo logoLayout, width int) (available, offset int, alignRight bool) {
+	if right := width - logo.right() - 3; right > 0 {
+		return min(right, 64), logo.right() + 1, true
 	}
+	return logo.x - 2, 1, false
+}
+
+func notificationLines(text string, width, height int) []string {
+	text = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' {
+			return ' '
+		}
+		return r
+	}, text)
+	var lines []string
+	for _, paragraph := range strings.Split(text, "\n") {
+		lines = append(lines, shared.WrapText(paragraph, width)...)
+	}
+	limit := max(1, min(6, height-12))
+	if len(lines) > limit {
+		lines = lines[:limit]
+		lines[limit-1] = shared.Truncate(lines[limit-1]+" …", width)
+	}
+	return lines
+}
+
+func (s *screen) notificationRows(width, height int) int {
+	message := s.notifications.Current()
+	if message == nil {
+		return 0
+	}
+	logo := calculateLogoLayout(width, height)
+	available, _, _ := notificationSpace(logo, width)
+	presentation := notification.Format(*message, tcell.StyleDefault)
+	return len(notificationLines(presentation.Text, available, height))
 }
 
 func (s *screen) activateNotification(index int) bool {

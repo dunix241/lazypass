@@ -9,6 +9,18 @@ import (
 	"lazypass/internal/vault"
 )
 
+func (p *Provider) signedOut() error {
+	command := "BITWARDENCLI_APPDATA_DIR=" + "'" + strings.ReplaceAll(p.DataDir, "'", "'\"'\"'") + "' bw login"
+	return &loginRequired{commandFailure{vault.ErrUninitialized, "Bitwarden is signed out. Run " + command + ", then refresh the vault"}, command}
+}
+
+type loginRequired struct {
+	commandFailure
+	command string
+}
+
+func (e *loginRequired) RecoveryCommand() string { return e.command }
+
 type commandFailure struct {
 	cause   error
 	message string
@@ -35,6 +47,8 @@ func classifyFailure(ctx context.Context, output []byte, err error) error {
 	}
 	message = strings.ToLower(message)
 	switch {
+	case strings.Contains(message, "statuscode: 403"), strings.Contains(message, "status code: 403"), strings.Contains(message, "http 403"):
+		return accessDenied()
 	case strings.Contains(message, "forbidden"), strings.Contains(message, "permission denied"), strings.Contains(message, "not authorized"), strings.Contains(message, "do not have permission"):
 		return &commandFailure{vault.ErrUnsupported, "Your account does not have permission for this Bitwarden operation"}
 	case strings.Contains(message, "not logged in"), strings.Contains(message, "unauthenticated"), strings.Contains(message, "login required"):

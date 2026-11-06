@@ -55,11 +55,24 @@ func (s *View) refresh(selectPath string) {
 				return
 			}
 			debug.Failure("vault list", vaultFailureCause(err))
-			if len(s.vaultNodes) > 0 || hasCachedLocation {
-				s.notify(shared.Warning, "Refresh failed; showing cached entries")
+			message := "Vault unavailable or folder cannot be opened."
+			var diagnostic vault.Diagnostic
+			if errors.As(err, &diagnostic) {
+				message = diagnostic.UserMessage()
+			}
+			var recovery vault.RecoveryCommand
+			if s.deps.NotifyRecovery != nil && errors.As(err, &recovery) {
+				s.deps.NotifyRecovery(message, recovery.RecoveryCommand())
 				return
 			}
-			s.vaultError = "Vault unavailable or folder cannot be opened."
+			if len(s.vaultNodes) > 0 || hasCachedLocation {
+				if diagnostic == nil {
+					message = "Refresh failed; showing cached entries"
+				}
+				s.notify(shared.Warning, message)
+				return
+			}
+			s.vaultError = message
 			nodes = nil
 		}
 		s.vaultNodes = nodes

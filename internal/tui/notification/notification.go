@@ -39,15 +39,19 @@ type Message struct {
 	Text     string
 	Level    shared.Level
 	Duration time.Duration
-	Actions  []Action
-	Title    string
-	Icon     string
-	Style    *tcell.Style
-	Present  Presenter
-	OnClose  func(CloseReason)
+	// A nonzero Duration overrides DurationMode; negative durations stay open.
+	DurationMode DurationMode
+	ReadingTime  *ReadingTime
+	Actions      []Action
+	Title        string
+	Icon         string
+	Style        *tcell.Style
+	Present      Presenter
+	OnClose      func(CloseReason)
 }
 
 type Options struct {
+	ReadingTime     ReadingTime
 	DefaultDuration time.Duration
 	MaxPending      int
 }
@@ -67,12 +71,8 @@ func (m *Manager) Show(message Message, now time.Time) {
 	if message.Text == "" && message.Title == "" && message.Present == nil {
 		return
 	}
-	if message.Duration == 0 {
-		message.Duration = m.options.DefaultDuration
-		if message.Duration == 0 {
-			message.Duration = DefaultDuration
-		}
-	}
+	message.Duration = m.messageDuration(message)
+	message.ReadingTime = nil
 	message.Actions = append([]Action(nil), message.Actions...)
 	if message.Style != nil {
 		style := *message.Style

@@ -74,6 +74,12 @@ func (p *Provider) Lock() { p.mu.Lock(); defer p.mu.Unlock(); p.session = ""; p.
 func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extra ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	if checker, ok := p.Runner.(serverAccessChecker); ok {
+		if err := checker.CheckServerAccess(ctx, p.Server); err != nil {
+			debug.Failure("bitwarden server access", debug.Unavailable)
+			return nil, err
+		}
+	}
 	env := []string{"BITWARDENCLI_APPDATA_DIR=" + p.DataDir, "BW_NOINTERACTION=true"}
 	if p.session != "" {
 		env = append(env, "BW_SESSION="+p.session)
@@ -87,6 +93,9 @@ func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extr
 		}
 		debug.Failure("bitwarden command", cause)
 		classified := classifyFailure(ctx, output, err)
+		if errors.Is(classified, vault.ErrUninitialized) {
+			classified = p.signedOut()
+		}
 		if errors.Is(classified, vault.ErrLocked) || errors.Is(classified, vault.ErrUninitialized) {
 			p.session = ""
 			p.metadata = nil
@@ -140,23 +149,12 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if p.session != "" {
 		return nil
 	}
-	// The built-in prompt can open before the slow CLI status process. Terminal
-	// callers retain status-first behavior so signed-out accounts do not prompt.
-	var password string
-	prompted := vault.HasPassphrasePrompt(ctx) && !vault.IsNoninteractive(ctx)
-	if prompted {
-		var err error
-		password, err = vault.RequestPassphrase(ctx, p.Prompt)
-		if err != nil {
-			return err
-		}
-	}
 	s, err := p.status(ctx)
 	if err != nil {
 		return err
 	}
 	if s.Status == "unauthenticated" {
-		return vault.ErrUninitialized
+		return p.signedOut()
 	}
 	if s.Status != "locked" && s.Status != "unlocked" {
 		return vault.ErrMalformed
@@ -164,11 +162,9 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if vault.IsNoninteractive(ctx) {
 		return vault.ErrPromptRequired
 	}
-	if !prompted {
-		password, err = vault.RequestPassphrase(ctx, p.Prompt)
-		if err != nil {
-			return err
-		}
+	password, err := vault.RequestPassphrase(ctx, p.Prompt)
+	if err != nil {
+		return err
 	}
 	output, err := p.run(ctx, []string{"unlock", "--passwordenv", "LAZYPASS_BW_PASSWORD", "--raw"}, nil, "LAZYPASS_BW_PASSWORD="+password)
 	defer clear(output)

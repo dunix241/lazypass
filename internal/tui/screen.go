@@ -70,7 +70,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 			screen.SetContent(xx, yy, ' ', nil, tcell.StyleDefault.Background(s.colors.Base))
 		}
 	}
-	l := calculateLayout(width, height)
+	l := s.contentLayout(width, height)
 	if l.tooSmall {
 		message := shared.Truncate("Resize terminal (min 32x18)", max(0, width-2))
 		shared.PrintAt(screen, x+max(1, (width-uniseg.StringWidth(message))/2), y+height/2, message, s.colors.Warning)
@@ -118,7 +118,16 @@ func (s *screen) switchRoute() {
 
 func (s *screen) frame() shared.Frame {
 	_, _, w, h := s.GetRect()
-	return s.frameFrom(calculateLayout(w, h))
+	return s.frameFrom(s.contentLayout(w, h))
+}
+
+func (s *screen) contentLayout(w, h int) layout {
+	l := calculateLayout(w, h)
+	if rows := s.notificationRows(w, h); rows > l.card.Y {
+		l.card.Y = rows
+		l.card.H = max(1, min(l.card.H, h-l.card.Y-1))
+	}
+	return l
 }
 
 func (s *screen) frameFrom(l layout) shared.Frame {
