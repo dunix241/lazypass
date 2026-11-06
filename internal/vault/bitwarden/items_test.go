@@ -61,6 +61,27 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 	}
 }
 
+func TestBuiltInPromptPrecedesCLIStatusAndIsNotReused(t *testing.T) {
+	r := &fakeRunner{}
+	p := New(t.TempDir(), "", nil, r)
+	ctx := vault.WithPassphrasePrompt(context.Background(), func(context.Context) (string, error) {
+		if r.calls != 0 {
+			t.Error("CLI work delayed built-in prompt")
+		}
+		return "fixture", nil
+	})
+	if _, err := p.List(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if r.unlocks != 1 {
+		t.Fatal("unlock missing")
+	}
+	ctx = vault.WithPassphrasePrompt(context.Background(), func(context.Context) (string, error) { t.Error("unlocked session prompted again"); return "", nil })
+	if _, err := p.List(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTypedReadUsesOneCLIGet(t *testing.T) {
 	r := &fakeRunner{itemType: 3}
 	p := New(t.TempDir(), "", func() (string, error) { return "fixture", nil }, r)

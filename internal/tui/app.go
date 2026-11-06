@@ -123,6 +123,7 @@ func (a *App) Run() error {
 	defer func() {
 		cancel()
 		jobs.Close()
+		a.screen.finishUnlock(unlockReply{err: context.Canceled})
 		a.screen.stopNotificationTimer()
 		a.screen.closeVaults()
 	}()

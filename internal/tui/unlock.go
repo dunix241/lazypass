@@ -15,12 +15,12 @@ import (
 const maxPassphraseBytes = 4096
 
 type unlockReply struct {
-	value string
+	value []byte
 	err   error
 }
 type unlockPrompt struct {
 	ctx   context.Context
-	value string
+	value []byte
 	reply chan unlockReply
 }
 
@@ -45,8 +45,13 @@ func (s *screen) requestVaultPassphrase(ctx context.Context, provider vault.Prov
 	})
 	select {
 	case reply := <-request.reply:
-		return reply.value, reply.err
+		defer clear(reply.value)
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		return string(reply.value), reply.err
 	case <-ctx.Done():
+		request.discardReply()
 		cleanupCtx := s.operationContext
 		if cleanupCtx == nil {
 			cleanupCtx = context.Background()
@@ -55,6 +60,7 @@ func (s *screen) requestVaultPassphrase(ctx context.Context, provider vault.Prov
 			if s.unlock == request {
 				s.finishUnlock(unlockReply{err: ctx.Err()})
 			}
+			request.discardReply()
 		})
 		return "", ctx.Err()
 	}
@@ -63,13 +69,22 @@ func (s *screen) requestVaultPassphrase(ctx context.Context, provider vault.Prov
 func (s *screen) finishUnlock(reply unlockReply) {
 	p := s.unlock
 	if p == nil {
+		clear(reply.value)
 		return
 	}
 	s.unlock = nil
-	p.value = ""
+	if err := p.contextError(); err != nil {
+		clear(reply.value)
+		reply = unlockReply{err: err}
+	}
+	if reply.value == nil {
+		clear(p.value)
+	}
+	p.value = nil
 	select {
 	case p.reply <- reply:
 	default:
+		clear(reply.value)
 	}
 }
 
@@ -78,11 +93,13 @@ func (p *unlockPrompt) append(text string) {
 		if unicode.IsControl(r) {
 			continue
 		}
-		value := string(r)
-		if len(p.value)+len(value) > maxPassphraseBytes {
+		if len(p.value)+utf8.RuneLen(r) > maxPassphraseBytes {
 			break
 		}
-		p.value += value
+		if p.value == nil {
+			p.value = make([]byte, 0, maxPassphraseBytes)
+		}
+		p.value = utf8.AppendRune(p.value, r)
 	}
 }
 
@@ -91,8 +108,8 @@ func (s *screen) handleUnlock(event *tcell.EventKey) {
 	if p == nil {
 		return
 	}
-	if p.ctx != nil && p.ctx.Err() != nil {
-		s.finishUnlock(unlockReply{err: p.ctx.Err()})
+	if err := p.contextError(); err != nil {
+		s.finishUnlock(unlockReply{err: err})
 		return
 	}
 	switch event.Key() {
@@ -101,11 +118,12 @@ func (s *screen) handleUnlock(event *tcell.EventKey) {
 	case tcell.KeyEnter:
 		s.finishUnlock(unlockReply{value: p.value})
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		p.value = shared.DeleteLastRune(p.value)
+		_, size := utf8.DecodeLastRune(p.value)
+		p.truncate(len(p.value) - size)
 	case tcell.KeyCtrlU:
-		p.value = ""
+		p.truncate(0)
 	case tcell.KeyCtrlW:
-		p.value = shared.DeletePreviousWord(p.value)
+		p.deleteWord()
 	case tcell.KeyRune:
 		p.append(string(event.Rune()))
 	}
@@ -119,5 +137,40 @@ func (s *screen) drawUnlock(screen tcell.Screen, frame shared.Frame) {
 	shared.DrawBox(screen, r, colors.Focus, colors.Surface)
 	shared.PrintAt(screen, r.X+2, r.Y, " Unlock vault ", colors.Accent)
 	shared.PrintAt(screen, r.X+2, r.Y+2, "Passphrase:", colors.Text)
-	shared.PrintAt(screen, r.X+2, r.Y+3, strings.Repeat("*", min(utf8.RuneCountInString(s.unlock.value), max(0, r.W-5)))+"_", colors.Focus)
+	shared.PrintAt(screen, r.X+2, r.Y+3, strings.Repeat("*", min(utf8.RuneCount(s.unlock.value), max(0, r.W-5)))+"_", colors.Focus)
+}
+
+func (p *unlockPrompt) truncate(end int) {
+	clear(p.value[end:])
+	p.value = p.value[:end]
+}
+
+func (p *unlockPrompt) contextError() error {
+	if p.ctx == nil {
+		return nil
+	}
+	return p.ctx.Err()
+}
+
+func (p *unlockPrompt) discardReply() {
+	select {
+	case reply := <-p.reply:
+		clear(reply.value)
+	default:
+	}
+}
+
+func (p *unlockPrompt) deleteWord() {
+	end := len(p.value)
+	word := false
+	for end > 0 {
+		r, size := utf8.DecodeLastRune(p.value[:end])
+		space := unicode.IsSpace(r)
+		if word && space || !space && r == '/' {
+			break
+		}
+		word = word || !space
+		end -= size
+	}
+	p.truncate(end)
 }

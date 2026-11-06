@@ -140,6 +140,17 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if p.session != "" {
 		return nil
 	}
+	// The built-in prompt can open before the slow CLI status process. Terminal
+	// callers retain status-first behavior so signed-out accounts do not prompt.
+	var password string
+	prompted := vault.HasPassphrasePrompt(ctx) && !vault.IsNoninteractive(ctx)
+	if prompted {
+		var err error
+		password, err = vault.RequestPassphrase(ctx, p.Prompt)
+		if err != nil {
+			return err
+		}
+	}
 	s, err := p.status(ctx)
 	if err != nil {
 		return err
@@ -150,15 +161,17 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	if s.Status != "locked" && s.Status != "unlocked" {
 		return vault.ErrMalformed
 	}
-	p.session = ""
 	if vault.IsNoninteractive(ctx) {
 		return vault.ErrPromptRequired
 	}
-	password, err := vault.RequestPassphrase(ctx, p.Prompt)
-	if err != nil {
-		return err
+	if !prompted {
+		password, err = vault.RequestPassphrase(ctx, p.Prompt)
+		if err != nil {
+			return err
+		}
 	}
 	output, err := p.run(ctx, []string{"unlock", "--passwordenv", "LAZYPASS_BW_PASSWORD", "--raw"}, nil, "LAZYPASS_BW_PASSWORD="+password)
+	defer clear(output)
 	if err != nil {
 		return err
 	}

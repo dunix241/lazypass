@@ -2,6 +2,7 @@ package vault
 
 import (
 	"lazypass/internal/tui/shared"
+	"lazypass/internal/vault"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -46,11 +47,7 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		listY, _, _ := s.vaultListWindow(r)
 		if s.showVaultParentRow() {
 			parent := s.vaultParentNode()
-			prefix := "  "
-			if s.vaultSelected == 0 {
-				prefix = "> "
-			}
-			shared.PrintAt(screen, r.X+2, listY, shared.Truncate(prefix+nodeLabel(parent, frame.NerdFont), r.W-4), nodeColor(parent, colors))
+			s.drawBrowserRow(screen, frame, r, parent, listY, s.vaultSelected == 0)
 			listY++
 		}
 		shared.PrintAt(screen, r.X+2, listY, shared.Truncate(s.vaultError, r.W-4), colors.Warning)
@@ -69,14 +66,18 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	}
 	listY, limit, start := s.vaultListWindow(r)
 	for i := start; i < len(nodes) && i < start+limit; i++ {
-		node, prefix := nodes[i], "  "
+		node := nodes[i]
 		if s.vaultFiltering {
 			node.Name = s.searchName(node)
 		}
-		if i == s.vaultSelected {
-			prefix = "> "
-		}
-		shared.PrintAt(screen, r.X+2, listY+i-start, shared.Truncate(prefix+nodeLabel(node, frame.NerdFont), r.W-4), nodeColor(node, colors))
+		s.drawBrowserRow(screen, frame, r, node, listY+i-start, i == s.vaultSelected)
+	}
+}
+
+func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.Rect, node vault.Node, y int, selected bool) {
+	shared.PrintAt(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), r.W-4), nodeColor(node, frame.Palette))
+	if selected && s.deleteTarget == nil {
+		screen.ShowCursor(r.X+2, y)
 	}
 }
 

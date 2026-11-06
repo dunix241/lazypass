@@ -89,6 +89,9 @@ func (s *screen) Draw(screen tcell.Screen) {
 		footer = s.generator.Footer(width)
 	}
 	shared.PrintAt(screen, x+max(1, (width-uniseg.StringWidth(footer))/2), y+height-1, footer, s.colors.Muted)
+	if s.overlay != noOverlay || s.unlock != nil {
+		screen.HideCursor()
+	}
 	switch s.overlay {
 	case themeOverlay:
 		s.themePanel.Draw(screen, frame)

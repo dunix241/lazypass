@@ -26,6 +26,11 @@ type noninteractiveKey struct{}
 type passphrasePromptKey struct{}
 type PassphrasePrompt func(context.Context) (string, error)
 
+func HasPassphrasePrompt(ctx context.Context) bool {
+	_, ok := ctx.Value(passphrasePromptKey{}).(PassphrasePrompt)
+	return ok
+}
+
 func WithPassphrasePrompt(ctx context.Context, prompt PassphrasePrompt) context.Context {
 	return context.WithValue(ctx, passphrasePromptKey{}, prompt)
 }

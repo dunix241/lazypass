@@ -72,10 +72,10 @@ func TestInactiveVaultCannotOpenUnlockPrompt(t *testing.T) {
 func TestUnlockInputUsesConsistentByteLimit(t *testing.T) {
 	p := &unlockPrompt{}
 	p.append("one\ntwo\x00\t")
-	if p.value != "onetwo" {
+	if string(p.value) != "onetwo" {
 		t.Fatal("control characters accepted")
 	}
-	p.value = strings.Repeat("x", maxPassphraseBytes-1)
+	p.value = []byte(strings.Repeat("x", maxPassphraseBytes-1))
 	p.append("€")
 	if len(p.value) != maxPassphraseBytes-1 {
 		t.Fatal("multibyte rune exceeded limit")
@@ -86,6 +86,57 @@ func TestUnlockInputUsesConsistentByteLimit(t *testing.T) {
 	}
 }
 
+func TestUnlockBufferClearedOnCancelAndDeletion(t *testing.T) {
+	p := &unlockPrompt{reply: make(chan unlockReply, 1)}
+	p.append("fixture")
+	buffer := p.value
+	p.truncate(3)
+	for _, b := range buffer[3:] {
+		if b != 0 {
+			t.Fatal("deleted bytes retained")
+		}
+	}
+	s := &screen{unlock: p}
+	s.finishUnlock(unlockReply{err: context.Canceled})
+	for _, b := range buffer {
+		if b != 0 {
+			t.Fatal("cancelled bytes retained")
+		}
+	}
+}
+
+func TestUnlockDiscardClearsQueuedSecret(t *testing.T) {
+	buffer := []byte("public-fixture")
+	p := &unlockPrompt{reply: make(chan unlockReply, 1)}
+	p.reply <- unlockReply{value: buffer}
+	p.discardReply()
+	for _, b := range buffer {
+		if b != 0 {
+			t.Fatal("queued secret retained")
+		}
+	}
+	select {
+	case <-p.reply:
+		t.Fatal("reply not drained")
+	default:
+	}
+}
+
+func TestUnlockWordDeletionClearsRemovedBytes(t *testing.T) {
+	p := &unlockPrompt{}
+	p.append("folder/word  ")
+	buffer := p.value
+	p.deleteWord()
+	if string(p.value) != "folder/" {
+		t.Fatal("word deletion changed")
+	}
+	for _, b := range buffer[len(p.value):] {
+		if b != 0 {
+			t.Fatal("removed word retained")
+		}
+	}
+}
+
 func TestCanceledUnlockRemovesPopup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	updates := make(chan func(), 2)
@@ -93,7 +144,7 @@ func TestCanceledUnlockRemovesPopup(t *testing.T) {
 	finished := make(chan error, 1)
 	go func() { _, err := s.requestVaultPassphrase(ctx, nil); finished <- err }()
 	(<-updates)()
-	s.unlock.value = "fixture"
+	s.unlock.value = []byte("fixture")
 	cancel()
 	select {
 	case err := <-finished:
