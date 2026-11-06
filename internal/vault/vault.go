@@ -170,6 +170,11 @@ type ContainerActions interface {
 	ContainerAction(Path) (label string, supported bool)
 }
 
+// BrowserCacheIdentity identifies the signed-in account without unlocking it.
+type BrowserCacheIdentity interface {
+	BrowserCacheIdentity(context.Context) (string, error)
+}
+
 type SyncResult struct {
 	Pulled bool
 	Pushed bool

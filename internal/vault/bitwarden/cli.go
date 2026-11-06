@@ -106,8 +106,22 @@ func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extr
 }
 
 type status struct {
+	UserID    string `json:"userId"`
 	Status    string `json:"status"`
 	ServerURL string `json:"serverUrl"`
+}
+
+func (p *Provider) BrowserCacheIdentity(ctx context.Context) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, err := p.status(ctx)
+	if err != nil {
+		return "", err
+	}
+	if s.Status == "unauthenticated" || s.UserID == "" {
+		return "", p.signedOut()
+	}
+	return p.Server + "\x00" + s.UserID, nil
 }
 
 func (p *Provider) status(ctx context.Context) (status, error) {

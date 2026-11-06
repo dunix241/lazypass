@@ -47,3 +47,18 @@ func TestCorruptCacheRecoversOnSave(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCacheScopeSeparatesAccounts(t *testing.T) {
+	base := &Store{Path: filepath.Join(t.TempDir(), "base.json")}
+	a, b := base.Scoped("server/account-a"), base.Scoped("server/account-b")
+	if a.Path == b.Path || a.Path != base.Scoped("server/account-a").Path {
+		t.Fatal("unstable account isolation")
+	}
+	if err := a.Save(nil, []vault.Node{{Name: "a", Path: vault.Path{"a"}, Kind: vault.EntryNode}}); err != nil {
+		t.Fatal(err)
+	}
+	locations, err := b.Load()
+	if err != nil || len(locations) != 0 {
+		t.Fatal("account b read account a cache")
+	}
+}

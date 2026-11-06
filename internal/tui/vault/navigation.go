@@ -82,6 +82,7 @@ func (s *View) refresh(selectPath string) {
 				s.cachedLocations = make(map[string][]vault.Node)
 			}
 			s.cachedLocations[path.String()] = nodes
+			s.rememberLocationParents(path, nodes)
 		}
 		s.rememberLocationLabels(nodes)
 		if s.vaultFiltering {
@@ -135,13 +136,31 @@ func (s *View) loadBrowserCache(selectPath string) bool {
 	s.cacheLoaded, s.cacheLoading = true, true
 	s.loading = len(s.vaultNodes) == 0
 	go func() {
-		locations, err := s.deps.Cache.Load()
+		cache := s.deps.Cache
+		var err error
+		if identity, ok := s.vault.Provider.(vault.BrowserCacheIdentity); ok {
+			var account string
+			account, err = identity.BrowserCacheIdentity(ctx)
+			if err == nil {
+				cache = cache.Scoped(account)
+			} else {
+				cache = nil
+			}
+		}
+		var locations map[string][]vault.Node
+		if err == nil {
+			locations, err = cache.Load()
+		}
 		s.deps.Dispatch(ctx, func() {
 			s.cacheLoading = false
+			s.deps.Cache = cache
 			if err == nil {
 				s.cachedLocations = locations
-				for _, nodes := range locations {
+				for parent, nodes := range locations {
 					s.rememberLocationLabels(nodes)
+					if path, err := vault.ParsePath(parent); err == nil {
+						s.rememberLocationParents(path, nodes)
+					}
 				}
 				s.restoreCachedLocation()
 			} else {
@@ -171,7 +190,28 @@ func (s *View) vaultParent() {
 		return
 	}
 	child := s.vaultPath.String()
-	s.navigate(s.vaultPath[:len(s.vaultPath)-1], 0, child)
+	s.navigate(s.parentPath(), 0, child)
+}
+
+func (s *View) rememberLocationParents(parent vault.Path, nodes []vault.Node) {
+	if s.locationParents == nil {
+		s.locationParents = make(map[string]vault.Path)
+	}
+	for _, node := range nodes {
+		if node.Kind == vault.FolderNode && node.Path.String() != parent.String() {
+			s.locationParents[node.Path.String()] = append(vault.Path(nil), parent...)
+		}
+	}
+}
+
+func (s *View) parentPath() vault.Path {
+	if parent, ok := s.locationParents[s.vaultPath.String()]; ok {
+		return append(vault.Path(nil), parent...)
+	}
+	if len(s.vaultPath) == 0 {
+		return nil
+	}
+	return append(vault.Path(nil), s.vaultPath[:len(s.vaultPath)-1]...)
 }
 func (s *View) openVaultNode() {
 	node, ok := s.selectedVaultNode()

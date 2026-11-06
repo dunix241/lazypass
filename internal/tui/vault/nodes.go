@@ -9,7 +9,7 @@ import (
 
 func (s *View) showVaultParentRow() bool { return len(s.vaultPath) > 0 && !s.vaultFiltering }
 func (s *View) vaultParentNode() vault.Node {
-	parent := append(vault.Path(nil), s.vaultPath[:len(s.vaultPath)-1]...)
+	parent := s.parentPath()
 	return vault.Node{Name: "..", Path: parent, Kind: vault.FolderNode}
 }
 func (s *View) isVaultParentNode(node vault.Node) bool {

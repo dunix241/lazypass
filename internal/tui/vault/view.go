@@ -26,6 +26,7 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	locationParents  map[string]vault.Path
 	cachedLocations  map[string][]vault.Node
 	cacheLoaded      bool
 	cacheLoading     bool

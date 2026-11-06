@@ -36,6 +36,11 @@ func New(identity string) *Store {
 	return &Store{Path: filepath.Join(root, "lazypass", "browser", hex.EncodeToString(digest[:])+".json")}
 }
 
+func (s *Store) Scoped(identity string) *Store {
+	digest := sha256.Sum256([]byte(s.Path + "\x00" + identity))
+	return &Store{Path: filepath.Join(filepath.Dir(s.Path), hex.EncodeToString(digest[:])+".json")}
+}
+
 func (s *Store) load() (document, error) {
 	doc := document{Version: 1, Locations: make(map[string][]vault.Node)}
 	f, err := os.Open(s.Path)

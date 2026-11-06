@@ -118,14 +118,18 @@ func notificationLines(text string, width, height int) []string {
 		}
 		return r
 	}, text)
+	paragraphs := strings.Split(text, "\n")
 	var lines []string
-	for _, paragraph := range strings.Split(text, "\n") {
+	for _, paragraph := range paragraphs {
 		lines = append(lines, shared.WrapText(paragraph, width)...)
 	}
 	limit := max(1, min(6, height-12))
 	if len(lines) > limit {
 		lines = lines[:limit]
 		lines[limit-1] = shared.Truncate(lines[limit-1]+" …", width)
+		if len(paragraphs) > 1 && strings.HasPrefix(paragraphs[len(paragraphs)-1], "F2 ") {
+			lines[limit-1] = shared.Truncate(paragraphs[len(paragraphs)-1], width)
+		}
 	}
 	return lines
 }
