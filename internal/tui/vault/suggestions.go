@@ -10,6 +10,13 @@ import (
 )
 
 func (s *StoreForm) refreshStoreSuggestions() {
+	if s.cancelSuggestions != nil {
+		s.cancelSuggestions()
+		s.cancelSuggestions = nil
+	}
+	s.suggestionPending = make(map[string]bool)
+	s.suggestionGeneration++
+	s.loadingEntries = false
 	s.storeNodes, s.storeSelected, s.storeMessage = nil, 0, ""
 	path, prefix, err := storeSuggestionQuery(s.storePath)
 	if err != nil {
@@ -46,6 +53,11 @@ func (s *StoreForm) refreshStoreSuggestions() {
 			return err
 		}, func(err error) {
 			defer cancel()
+			if generation != s.suggestionGeneration || !s.open {
+				return
+			}
+			delete(s.suggestionPending, key)
+			s.loadingEntries = false
 			if request.Err() != nil {
 				return
 			}
@@ -99,6 +111,13 @@ func (s *StoreForm) insertStoreSuggestion() {
 	node := s.storeNodes[s.storeSelected]
 	if node.Kind != vault.FolderNode {
 		return
+	}
+	if s.locationOnly && len(s.location) >= 3 {
+		return
+	}
+	if s.locationOnly {
+		s.location = append(vault.Path(nil), node.Path...)
+		s.entryName = ""
 	}
 	s.storePath = node.Path.String() + "/"
 	s.refreshStoreSuggestions()

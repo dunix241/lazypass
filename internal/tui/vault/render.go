@@ -3,6 +3,7 @@ package vault
 import (
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -11,11 +12,11 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	defer s.drawDelete(screen, frame)
 	r, colors := frame.Card, frame.Palette
 	shared.DrawBox(screen, r, colors.Border, colors.Surface)
-	path := "/"
-	if len(s.vaultPath) > 0 {
-		path += s.vaultPath.String()
-	}
+	path := s.LocationLabel(s.vaultPath)
 	title := "Vault"
+	if s.showingCached {
+		title += " · cached"
+	}
 	if s.deps.Name != "" {
 		title += " · " + s.deps.Name
 	}
@@ -79,6 +80,19 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 	if selected && s.deleteTarget == nil {
 		screen.ShowCursor(r.X+2, y)
 	}
+}
+
+func (s *View) LocationLabel(path vault.Path) string {
+	labels := make([]string, len(path))
+	for i, part := range path {
+		labels[i] = part
+		if label := s.locationLabels[path[:i+1].String()]; label != "" {
+			labels[i] = label
+		} else if len(part) == 36 {
+			labels[i] = part[:8]
+		}
+	}
+	return "/" + strings.Join(labels, "/")
 }
 
 func (s *View) vaultListWindow(card shared.Rect) (listY, limit, start int) {

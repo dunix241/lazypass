@@ -484,7 +484,7 @@ func (p *Provider) Delete(ctx context.Context, path vault.Path) error {
 
 func (p *Provider) CreateFolder(ctx context.Context, path vault.Path) error {
 	if len(path) > 0 && path[0] == "Organizations" {
-		return vault.ErrUnsupported
+		return p.createCollection(ctx, path)
 	}
 	path = personalPath(path)
 	if err := validPath(path); err != nil {

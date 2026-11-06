@@ -18,6 +18,8 @@ type organizationRunner struct {
 
 func (r *organizationRunner) Run(ctx context.Context, args []string, input io.Reader, env []string) ([]byte, error) {
 	switch strings.Join(args, " ") {
+	case "create org-collection --organizationid org-id":
+		return []byte(`{"id":"created-group","organizationId":"org-id","name":"Services "}`), nil
 	case "create item":
 		encoded, err := io.ReadAll(input)
 		if err != nil {
@@ -121,6 +123,9 @@ func TestOrganizationBrowsingAndPreservingEdit(t *testing.T) {
 		t.Fatalf("organizations %v %v", orgs, err)
 	}
 	groups, err := p.List(ctx, orgs[0].Path)
+	if err == nil && len(groups) == 1 {
+		groups, err = p.List(ctx, groups[0].Path)
+	}
 	if err != nil || len(groups) != 2 || groups[0].Path.String() == groups[1].Path.String() {
 		t.Fatalf("collection identities %v %v", groups, err)
 	}

@@ -4,10 +4,13 @@ import (
 	"context"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/browsercache"
 	"lazypass/internal/vault/service"
 )
 
 type Dependencies struct {
+	Context      func() context.Context
+	Cache        *browsercache.Store
 	RunOperation OperationRunner
 	Name         string
 	Service      service.Service
@@ -22,6 +25,11 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	cachedLocations  map[string][]vault.Node
+	cacheLoaded      bool
+	cacheLoading     bool
+	showingCached    bool
+	locationLabels   map[string]string
 	metadataLoading  bool
 	refreshing       bool
 	deleting         bool

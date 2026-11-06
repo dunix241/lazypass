@@ -2,7 +2,9 @@ package bitwarden
 
 import (
 	"context"
+	"encoding/base64"
 	"sort"
+	"strings"
 
 	"lazypass/internal/vault"
 )
@@ -91,6 +93,37 @@ func (s *snapshot) indexOrganizations() {
 			collections[path.String()] = group
 		}
 	}
+	// Collection IDs remain flat references; visual parents group slash-delimited names.
+	for _, group := range s.collections {
+		orgPath := vault.Path{"Organizations", group.OrganizationID}
+		original := vault.Path{"Organizations", group.OrganizationID, group.ID}
+		if _, ok := collections[original.String()]; !ok {
+			continue
+		}
+		parts := strings.Split(group.Name, "/")
+		parent := orgPath
+		for i := 0; i < len(parts)-1; i++ {
+			prefix := strings.Join(parts[:i+1], "/")
+			id := "group-" + base64.RawURLEncoding.EncodeToString([]byte(prefix))
+			virtual := append(append(vault.Path(nil), orgPath...), id)
+			if _, ok := tree[virtual.String()]; !ok {
+				tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: virtual, Name: parts[i], Kind: vault.FolderNode, Protected: true})
+				tree[virtual.String()] = nil
+			}
+			parent = virtual
+		}
+		if len(parts) > 1 {
+			nodes := tree[orgPath.String()]
+			for i, node := range nodes {
+				if node.Path.String() == original.String() {
+					nodes = append(nodes[:i], nodes[i+1:]...)
+					break
+				}
+			}
+			tree[orgPath.String()] = nodes
+			tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: original, Name: parts[len(parts)-1], Kind: vault.FolderNode, Protected: true})
+		}
+	}
 	for _, entry := range s.excluded {
 		if entry.OrganizationID == "" || entry.Type < 1 || entry.Type > 5 || entry.ID == "" {
 			continue
@@ -134,28 +167,103 @@ func (s *snapshot) indexOrganizations() {
 }
 
 func (p *Provider) createOrganizationItem(ctx context.Context, s snapshot, entry vault.Entry) error {
-	if len(entry.Path) != 4 {
-		return vault.ErrUnsupported
-	}
-	c, err := s.organizationCollection(entry.Path[:3])
+	plan, err := s.planCreation(entry.Path)
 	if err != nil {
 		return err
 	}
-	if c.ReadOnly != nil && *c.ReadOnly {
-		return permissionDenied("create")
+	var c collection
+	if len(entry.Path) == 4 {
+		c, _ = s.organizationCollection(entry.Path[:3])
 	}
-	for _, existing := range s.excluded {
-		if existing.OrganizationID == c.OrganizationID && existing.Name == entry.Path[3] {
-			for _, id := range existing.CollectionIDs {
-				if id == c.ID {
-					return vault.ErrConflict
-				}
+	if c.ID == "" {
+		parts := strings.Split(plan.collectionName, "/")
+		for i := range parts {
+			c, err = p.ensureCollection(ctx, &s, plan.organizationID, strings.Join(parts[:i+1], "/"))
+			if err != nil {
+				return err
 			}
 		}
 	}
-	payload := itemPayload(entry, entry.Path[3], "")
+	payload := itemPayload(entry, plan.entryName, "")
 	payload["organizationId"], payload["collectionIds"] = c.OrganizationID, []string{c.ID}
 	_, err = p.submit(ctx, []string{"create", "item"}, payload)
+	if err == nil {
+		_, err = p.run(ctx, []string{"sync"}, nil)
+	}
+	return err
+}
+
+func (p *Provider) ValidateDestination(ctx context.Context, path vault.Path) error {
+	if len(path) == 0 {
+		return vault.ErrInvalidPath
+	}
+	if path[0] != "Organizations" {
+		if len(personalPath(path)) == 0 {
+			return vault.ErrInvalidPath
+		}
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, err := p.snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = s.planCreation(path)
+	return err
+}
+
+func (p *Provider) createCollection(ctx context.Context, path vault.Path) error {
+	if len(path) < 3 {
+		return vault.ErrInvalidPath
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	defer func() { p.metadata = nil }()
+	s, err := p.snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	name := path[2:].String()
+	if _, ok := s.organizationTree[path[:2].String()]; !ok {
+		id := ""
+		for _, org := range s.organizations {
+			if org.Name == path[1] {
+				if id != "" {
+					return vault.ErrConflict
+				}
+				id = org.ID
+			}
+		}
+		if id == "" {
+			return &commandFailure{vault.ErrUnsupported, "Organization does not exist; create it in the web vault first"}
+		}
+		path = append(vault.Path(nil), path...)
+		path[1] = id
+	}
+	if len(path) > 3 {
+		if parent, err := s.organizationCollection(path[:3]); err == nil {
+			name = parent.Name + "/" + path[3:].String()
+		} else if strings.HasPrefix(path[2], "group-") {
+			prefix, decodeErr := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(path[2], "group-"))
+			if decodeErr != nil {
+				return vault.ErrInvalidPath
+			}
+			if _, ok := s.organizationTree[path[:3].String()]; !ok {
+				return vault.ErrNotFound
+			}
+			name = string(prefix) + "/" + path[3:].String()
+		}
+	}
+	if _, ok := s.organizationTree[path[:2].String()]; !ok {
+		return vault.ErrNotFound
+	}
+	for _, c := range s.collections {
+		if c.OrganizationID == path[1] && c.Name == name {
+			return vault.ErrConflict
+		}
+	}
+	_, err = p.submit(ctx, []string{"create", "org-collection", "--organizationid", path[1]}, map[string]any{"name": name, "organizationId": path[1], "groups": []any{}, "users": []any{}})
 	return err
 }
 

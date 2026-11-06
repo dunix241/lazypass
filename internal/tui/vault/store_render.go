@@ -3,6 +3,7 @@ package vault
 import (
 	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
+	"lazypass/internal/vault"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -24,19 +25,22 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		title = strings.TrimSpace(title) + " · working… "
 	}
 	shared.PrintAt(screen, r.X+2, r.Y, title, colors.Accent)
+	if s.locationOnly && s.deps.LocationLabel != nil {
+		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate(s.deps.LocationLabel(s.location), r.W-4), colors.Muted)
+	}
 	if s.loadingEntry {
 		shared.PrintAt(screen, r.X+2, r.Y+3, "Loading entry…", colors.Muted)
 		return
 	}
 	if s.choosingType {
-		for i, kind := range s.deps.Service.SupportedEntryTypes() {
+		for i, action := range s.createActions() {
 			color := colors.Text
 			prefix := "  "
-			if kind == s.entryType {
+			if i == s.actionIndex {
 				color = colors.Focus
 				prefix = "> "
 			}
-			shared.PrintAt(screen, r.X+2, r.Y+2+i, prefix+kind.String(), color)
+			shared.PrintAt(screen, r.X+2, r.Y+2+i, prefix+action.label, color)
 		}
 		shared.PrintPanelFooter(screen, r, "↑/↓ select", colors.Muted)
 		return
@@ -46,7 +50,16 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	if s.editingValue {
-		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Entry: "+s.storePath, r.W-4), colors.Muted)
+		label := s.storePath
+		if s.deps.LocationLabel != nil {
+			path, err := vault.ParsePath(s.storePath)
+			if err == nil {
+				if len(path) > 0 {
+					label = s.deps.LocationLabel(path[:len(path)-1]) + "/" + path[len(path)-1]
+				}
+			}
+		}
+		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Entry: "+label, r.W-4), colors.Muted)
 		fields := s.entryFields()
 		extra := 0
 		if fields[s.field].multiline {
@@ -85,7 +98,15 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	shared.PrintAt(screen, r.X+2, r.Y+2, "Destination (folder/name):", colors.Muted)
-	s.editor("destination", s.storePath).Draw(screen, r.X+2, r.Y+3, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), true, input.Options{MaxBytes: fieldByteLimit})
+	if s.locationOnly {
+		label := "Select collection (Tab/Enter; Shift-Tab up):"
+		if len(s.location) == 3 {
+			label = "Entry name (Shift-Tab changes location):"
+		}
+		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate(label, r.W-4), colors.Muted)
+	}
+	_, editor, options := s.activeInput()
+	editor.Draw(screen, r.X+2, r.Y+3, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), true, options)
 	if s.storeMessage != "" {
 		shared.PrintAt(screen, r.X+2, r.Y+5, shared.Truncate(s.storeMessage, r.W-4), colors.Warning)
 	} else if visible > 0 {
@@ -111,7 +132,7 @@ func (s *StoreForm) storeFormRect(viewport shared.Rect) (shared.Rect, int) {
 	w := min(52, viewport.W-4)
 	maxHeight := viewport.H - 4
 	if s.choosingType {
-		h := min(10, maxHeight)
+		h := min(4+len(s.createActions()), maxHeight)
 		return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + (viewport.H-h)/2, W: w, H: h}, 0
 	}
 	if s.editingValue {

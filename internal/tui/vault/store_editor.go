@@ -27,6 +27,9 @@ func (field entryField) inputOptions() input.Options {
 
 func (s *StoreForm) activeInput() (*string, *input.Editor, input.Options) {
 	if !s.editingValue {
+		if s.locationOnly {
+			return &s.entryName, s.editor("entry-name", s.entryName), input.Options{MaxBytes: fieldByteLimit}
+		}
 		return &s.storePath, s.editor("destination", s.storePath), input.Options{MaxBytes: fieldByteLimit, WordSeparators: "/"}
 	}
 	field := s.entryFields()[s.field]
@@ -48,6 +51,10 @@ func (s *StoreForm) applyEditor(value *string, editor *input.Editor, err error) 
 	changed := *value != editor.Value()
 	*value = editor.Value()
 	if changed && !s.editingValue {
+		if s.locationOnly {
+			s.storePath = s.location.String() + "/" + s.entryName
+			return
+		}
 		s.refreshStoreSuggestions()
 	}
 }

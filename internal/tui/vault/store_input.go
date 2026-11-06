@@ -22,7 +22,7 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 		case tcell.KeyUp, tcell.KeyBacktab:
 			s.moveEntryType(-1)
 		case tcell.KeyEnter:
-			s.choosingType = false
+			s.chooseCreateAction()
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'j':
@@ -30,7 +30,7 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 			case 'k':
 				s.moveEntryType(-1)
 			default:
-				s.choosingType = false
+				s.chooseCreateAction()
 				s.HandleKey(event)
 			}
 		}
@@ -58,8 +58,31 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 		s.storeSelected = min(max(0, len(s.storeNodes)-1), s.storeSelected+1)
 	case tcell.KeyTAB:
 		s.insertStoreSuggestion()
+	case tcell.KeyBacktab:
+		if s.locationOnly && len(s.location) > 1 {
+			s.location = s.location[:len(s.location)-1]
+			s.entryName = ""
+			s.storePath = s.location.String() + "/"
+			s.refreshStoreSuggestions()
+		}
 	case tcell.KeyEnter:
 		{
+			if s.creatingContainer {
+				s.createFolder()
+				return
+			}
+			if s.locationOnly && s.entryName != "" && strings.HasSuffix(s.entryName, "/") {
+				s.createFolder()
+				return
+			}
+			if s.locationOnly && len(s.location) != 3 && s.entryName == "" {
+				s.insertStoreSuggestion()
+				return
+			}
+			if s.locationOnly && s.entryName == "" {
+				s.notify(shared.Warning, "Enter an entry name")
+				return
+			}
 			if strings.HasSuffix(s.storePath, "/") {
 				s.createFolder()
 				return
@@ -67,6 +90,10 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 			path, err := vault.ParsePath(s.storePath)
 			if err != nil || len(path) == 0 {
 				s.notify(shared.Warning, "Enter a valid vault destination")
+				return
+			}
+			if s.locationOnly && strings.HasPrefix(s.location[len(s.location)-1], "group-") {
+				s.notify(shared.Warning, "Select an actual collection before adding an entry")
 				return
 			}
 			provider := s.deps.Service
@@ -178,11 +205,10 @@ func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
 }
 
 func (s *StoreForm) moveEntryType(delta int) {
-	types := s.deps.Service.SupportedEntryTypes()
-	for index, kind := range types {
-		if kind == s.entryType {
-			s.entryType = types[(index+delta+len(types))%len(types)]
-			return
-		}
+	actions := s.createActions()
+	if len(actions) == 0 {
+		return
 	}
+	s.actionIndex = (s.actionIndex + delta + len(actions)) % len(actions)
+	s.entryType = actions[s.actionIndex].kind
 }

@@ -9,16 +9,23 @@ import (
 )
 
 type StoreDependencies struct {
-	RunOperation OperationRunner
-	Service      service.Service
-	Password     func() string
-	Notify       func(shared.Level, string)
-	Closed       func()
-	RunPrompted  PromptRunner
-	Saved        func(vault.Path)
+	RunOperation  OperationRunner
+	Service       service.Service
+	Password      func() string
+	Notify        func(shared.Level, string)
+	Closed        func()
+	RunPrompted   PromptRunner
+	Saved         func(vault.Path)
+	LocationLabel func(vault.Path) string
 }
 
 type StoreForm struct {
+	createParent         vault.Path
+	actionIndex          int
+	creatingContainer    bool
+	location             vault.Path
+	locationOnly         bool
+	entryName            string
 	editors              map[string]*input.Editor
 	entryType            vault.EntryType
 	choosingType         bool
@@ -92,8 +99,13 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 		return false
 	}
 	s.manual = true
-	s.choosingType = len(s.deps.Service.SupportedEntryTypes()) > 1
+	s.createParent = append(vault.Path(nil), parent...)
+	s.choosingType = len(s.createActions()) > 1
 	if len(parent) > 0 {
+		if parent[0] == "Organizations" {
+			s.location = append(vault.Path(nil), parent...)
+			s.locationOnly = true
+		}
 		s.storePath = parent.String() + "/"
 		s.refreshStoreSuggestions()
 	}

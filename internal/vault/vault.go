@@ -161,6 +161,15 @@ type Capabilities struct {
 
 type EntryTypes interface{ SupportedEntryTypes() []EntryType }
 
+// DestinationValidator checks provider-specific creation rules before editing.
+type DestinationValidator interface {
+	ValidateDestination(context.Context, Path) error
+}
+
+type ContainerActions interface {
+	ContainerAction(Path) (label string, supported bool)
+}
+
 type SyncResult struct {
 	Pulled bool
 	Pushed bool

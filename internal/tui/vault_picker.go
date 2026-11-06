@@ -2,9 +2,11 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"lazypass/internal/tui/shared"
 	vaultui "lazypass/internal/tui/vault"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/browsercache"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -21,7 +23,18 @@ func (s *screen) activateVault(index int) {
 		}
 	}
 	if s.vaultViews[index] == nil {
+		identity, _ := json.Marshal(struct {
+			ConfigPath, Name string
+			Vaults           any
+		}{s.cfgPath, selected.Name, s.cfg.Vaults})
 		s.vaultViews[index] = vaultui.New(vaultui.Dependencies{
+			Cache: browsercache.New(string(identity)),
+			Context: func() context.Context {
+				if s.operationContext != nil {
+					return s.operationContext
+				}
+				return nil
+			},
 			Name:         selected.Name,
 			Service:      selected.Service,
 			RunPrompted:  s.runPrompted,
@@ -35,12 +48,13 @@ func (s *screen) activateVault(index int) {
 	}
 	s.vault = s.vaultViews[index]
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
-		Service:      selected.Service,
-		Password:     s.generator.Password,
-		Notify:       notify,
-		Closed:       func() { s.overlay = noOverlay },
-		RunPrompted:  s.runPrompted,
-		RunOperation: s.operationRunner(selected.Service.Provider),
+		LocationLabel: s.vault.LocationLabel,
+		Service:       selected.Service,
+		Password:      s.generator.Password,
+		Notify:        notify,
+		Closed:        func() { s.overlay = noOverlay },
+		RunPrompted:   s.runPrompted,
+		RunOperation:  s.operationRunner(selected.Service.Provider),
 		Saved: func(vault.Path) {
 			if s.route == VaultRoute {
 				s.vault.Refresh()

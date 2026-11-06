@@ -77,6 +77,11 @@ func (s Service) CheckNewPath(ctx context.Context, path vault.Path) error {
 	if err := path.Validate(); err != nil {
 		return err
 	}
+	if validator, ok := s.Provider.(vault.DestinationValidator); ok {
+		if err := validator.ValidateDestination(ctx, path); err != nil {
+			return err
+		}
+	}
 	nodes, err := s.List(ctx, path[:len(path)-1])
 	if errors.Is(err, vault.ErrNotFound) {
 		return nil
