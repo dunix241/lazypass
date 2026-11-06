@@ -23,14 +23,12 @@ func (s *View) refresh(selectPath string) {
 	if len(s.vaultNodes) == 0 {
 		s.restoreCachedLocation()
 	}
+	selectionRestored := s.selectNodePath(selectPath)
 	s.vaultError = ""
 	s.loadGeneration++
 	generation := s.loadGeneration
 	path := append(vault.Path(nil), s.vaultPath...)
-	selectedPath := ""
-	if node, ok := s.selectedVaultNode(); ok {
-		selectedPath = node.Path.String()
-	}
+	initialSelection := s.vaultSelected
 	_, hasCachedLocation := s.cachedLocations[path.String()]
 	s.loading = len(s.vaultNodes) == 0 && !hasCachedLocation
 	s.refreshing = !s.loading
@@ -75,8 +73,10 @@ func (s *View) refresh(selectPath string) {
 			s.vaultError = message
 			nodes = nil
 		}
+		if current, ok := s.selectedVaultNode(); ok && (selectionRestored || s.vaultSelected != initialSelection || selectPath == "") {
+			selectPath = current.Path.String()
+		}
 		s.vaultNodes = nodes
-		s.showingCached = false
 		if err == nil {
 			if s.cachedLocations == nil {
 				s.cachedLocations = make(map[string][]vault.Node)
@@ -93,24 +93,26 @@ func (s *View) refresh(selectPath string) {
 			s.searchLoaded = false
 		}
 		s.vaultSelected = min(s.vaultSelected, max(0, len(s.vaultDisplayNodes())-1))
-		if selectPath == "" {
-			selectPath = selectedPath
-		}
-		if selectPath != "" {
-			for i, node := range s.vaultDisplayNodes() {
-				if !s.isVaultParentNode(node) && node.Path.String() == selectPath {
-					s.vaultSelected = i
-					break
-				}
-			}
-		}
+		s.selectNodePath(selectPath)
 	})
+}
+
+func (s *View) selectNodePath(path string) bool {
+	if path == "" {
+		return false
+	}
+	for i, node := range s.vaultDisplayNodes() {
+		if node.Path.String() == path {
+			s.vaultSelected = i
+			return true
+		}
+	}
+	return false
 }
 
 func (s *View) restoreCachedLocation() {
 	if nodes, ok := s.cachedLocations[s.vaultPath.String()]; ok {
 		s.vaultNodes = nodes
-		s.showingCached = true
 	}
 }
 
@@ -178,7 +180,7 @@ func (s *View) navigate(path vault.Path, selected int, selectPath string) {
 	s.vaultFiltering, s.vaultFilter = false, ""
 	s.vaultPath = append(vault.Path(nil), path...)
 	s.vaultSelected = selected
-	s.vaultNodes, s.showingCached = nil, false
+	s.vaultNodes = nil
 	s.refresh(selectPath)
 }
 func (s *View) moveVaultSelection(delta int) {

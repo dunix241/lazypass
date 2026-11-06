@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/service"
 )
 
 func TestCachedRowsRemainInteractiveDuringRefresh(t *testing.T) {
@@ -29,6 +30,24 @@ func TestCachedRowsRemainInteractiveDuringRefresh(t *testing.T) {
 		if v.loading || v.refreshing || len(v.vaultNodes) != len(nodes) {
 			t.Fatal("failed refresh discarded cached snapshot")
 		}
+	}
+}
+
+func TestRefreshPreservesMovedSelectionAfterRowsReorder(t *testing.T) {
+	a := vault.Node{Path: vault.Path{"a"}, Name: "a", Kind: vault.FolderNode}
+	b := vault.Node{Path: vault.Path{"b"}, Name: "b", Kind: vault.FolderNode}
+	provider := &memoryVault{nodes: map[string][]vault.Node{"": {b, a}}}
+	var finish func()
+	v := New(Dependencies{Service: service.Service{Provider: provider}, RunOperation: func(work func(context.Context) error, done func(error)) {
+		finish = func() { done(work(context.Background())) }
+	}})
+	v.cachedLocations = map[string][]vault.Node{"": {a, b}}
+	v.refresh("a")
+	v.moveVaultSelection(1)
+	finish()
+	node, ok := v.selectedVaultNode()
+	if !ok || node.Path.String() != "b" {
+		t.Fatalf("refresh lost user selection: %v", node)
 	}
 }
 
@@ -66,4 +85,26 @@ func TestUncachedNavigationNeverDisplaysParentRows(t *testing.T) {
 	if len(v.vaultNodes) != 0 || !v.loading {
 		t.Fatal("uncached destination displayed parent rows")
 	}
+}
+
+func TestParentNavigationSelectsCachedChildImmediately(t *testing.T) {
+	var complete func(error)
+	v := New(Dependencies{RunOperation: func(_ func(context.Context) error, done func(error)) { complete = done }})
+	parent := vault.Path{"Personal"}
+	child := vault.Path{"Personal", "work"}
+	v.vaultPath = child
+	v.cachedLocations = map[string][]vault.Node{
+		parent.String(): {
+			{Path: vault.Path{"Personal", "other"}, Name: "other", Kind: vault.FolderNode},
+			{Path: child, Name: "work", Kind: vault.FolderNode},
+		},
+	}
+	v.vaultParent()
+	node, ok := v.selectedVaultNode()
+	if !ok || node.Path.String() != child.String() {
+		t.Fatalf("cached parent selected wrong row: %v", node)
+	}
+	// Keep this test's provider result empty; completion should not panic when a
+	// selected cached row disappears from the new snapshot.
+	complete(nil)
 }

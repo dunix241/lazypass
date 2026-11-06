@@ -30,7 +30,7 @@ type View struct {
 	cachedLocations  map[string][]vault.Node
 	cacheLoaded      bool
 	cacheLoading     bool
-	showingCached    bool
+	syncing          bool
 	locationLabels   map[string]string
 	metadataLoading  bool
 	refreshing       bool

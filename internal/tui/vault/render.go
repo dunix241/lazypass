@@ -14,9 +14,6 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	shared.DrawBox(screen, r, colors.Border, colors.Surface)
 	path := s.LocationLabel(s.vaultPath)
 	title := "Vault"
-	if s.showingCached {
-		title += " · cached"
-	}
 	if s.deps.Name != "" {
 		title += " · " + s.deps.Name
 	}
@@ -25,7 +22,7 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 		title += " · deleting…"
 	case s.copying:
 		title += " · copying…"
-	case s.refreshing:
+	case s.syncing:
 		title += " · refreshing…"
 	}
 	shared.PrintAt(screen, r.X+2, r.Y, shared.Truncate(" "+title+": "+path+" ", r.W-4), colors.Accent)

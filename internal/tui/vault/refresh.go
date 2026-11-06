@@ -13,6 +13,7 @@ func (s *View) refreshProvider() {
 		return
 	}
 	s.refreshing = true
+	s.syncing = true
 	provider := s.vault
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
 		if provider.Provider != nil && provider.Provider.Capabilities().Sync {
@@ -22,6 +23,7 @@ func (s *View) refreshProvider() {
 		return nil
 	}, func(err error) {
 		s.refreshing = false
+		s.syncing = false
 		if err != nil {
 			var recovery vault.RecoveryCommand
 			if s.deps.NotifyRecovery != nil && errors.As(err, &recovery) {
