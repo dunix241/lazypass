@@ -35,6 +35,8 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 		return []byte("fixture-session\n"), nil
 	case "list folders":
 		return []byte(`[{"id":"folder-id","name":"hello"}]`), nil
+	case "list organizations", "list collections":
+		return []byte(`[]`), nil
 	case "list items":
 		if r.itemType != 0 {
 			return []byte(`[{"id":"item-id","name":"world","folderId":"folder-id","type":3}]`), nil
@@ -104,7 +106,7 @@ func TestSessionFolderMappingAndPreservingEdit(t *testing.T) {
 		t.Fatalf("probe=%v", err)
 	}
 	nodes, err := p.List(ctx, nil)
-	if err != nil || len(nodes) != 1 || nodes[0].Name != "hello" {
+	if err != nil || len(nodes) != 2 || nodes[0].Name != "Personal" || nodes[1].Name != "Organizations" {
 		t.Fatalf("nodes=%v err=%v", nodes, err)
 	}
 	nodes, err = p.List(ctx, vault.Path{"hello"})

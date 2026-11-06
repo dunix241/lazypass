@@ -20,6 +20,10 @@ func (s *View) openDelete() {
 	if !ok || s.isVaultParentNode(node) || len(node.Path) == 0 {
 		return
 	}
+	if node.Protected {
+		s.notify(shared.Warning, "This location cannot be deleted")
+		return
+	}
 	if s.vault.Provider == nil || !s.vault.Provider.Capabilities().Delete {
 		s.notify(shared.Warning, "Deletion unavailable")
 		return
@@ -51,6 +55,10 @@ func (s *View) handleDeleteKey(event *tcell.EventKey) {
 				if errors.Is(err, vault.ErrUnsupported) {
 					message = "Deletion unavailable"
 				}
+				var diagnostic vault.Diagnostic
+				if errors.As(err, &diagnostic) {
+					message = diagnostic.UserMessage()
+				}
 				s.notify(shared.Error, message)
 				return
 			}
@@ -77,8 +85,14 @@ func (s *View) drawDelete(screen tcell.Screen, frame shared.Frame) {
 	if s.deleteTarget.Kind == vault.FolderNode {
 		title = " Delete folder "
 	}
+	if s.deleteTarget.Shared {
+		title = " Delete shared entry "
+	}
 	shared.PrintAt(screen, r.X+2, r.Y, shared.Truncate(title, w-4), colors.Warning)
-	shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate(s.deleteTarget.Path.String(), w-4), colors.Text)
+	shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate(s.deleteTarget.Name, w-4), colors.Text)
+	if s.deleteTarget.Shared {
+		shared.PrintAt(screen, r.X+2, r.Y+3, shared.Truncate("Deletes this item from every collection", w-4), colors.Warning)
+	}
 	shared.PrintPanelFooter(screen, r, "y yes  •  n no", colors.Muted)
 	const prefix = "y yes  •  "
 	const choices = prefix + "n no"

@@ -15,12 +15,14 @@ type folder struct {
 	Name string `json:"name"`
 }
 type item struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	FolderID       string  `json:"folderId"`
-	OrganizationID string  `json:"organizationId"`
-	Type           int     `json:"type"`
-	DeletedDate    *string `json:"deletedDate"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	FolderID       string   `json:"folderId"`
+	OrganizationID string   `json:"organizationId"`
+	CollectionIDs  []string `json:"collectionIds"`
+	Edit           *bool    `json:"edit"`
+	Type           int      `json:"type"`
+	DeletedDate    *string  `json:"deletedDate"`
 	Login          struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -32,9 +34,14 @@ type item struct {
 }
 
 type snapshot struct {
-	folders  []folder
-	items    []item
-	excluded []item
+	organizationTree  map[string][]vault.Node
+	organizationItems map[string]item
+	collectionByPath  map[string]collection
+	organizations     []organization
+	collections       []collection
+	folders           []folder
+	items             []item
+	excluded          []item
 }
 
 func (p *Provider) SupportedEntryTypes() []vault.EntryType {
@@ -60,7 +67,19 @@ func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 	if err != nil {
 		return result, err
 	}
-	result.folders = folders
+	for _, f := range folders {
+		if f.ID != "" {
+			result.folders = append(result.folders, f)
+		}
+	}
+	result.organizations, err = decode[[]organization](p.run(ctx, []string{"list", "organizations"}, nil))
+	if err != nil {
+		return result, err
+	}
+	result.collections, err = decode[[]collection](p.run(ctx, []string{"list", "collections"}, nil))
+	if err != nil {
+		return result, err
+	}
 	for _, entry := range items {
 		entry.Login.Password = ""
 		entry.Login.Username = ""
@@ -72,6 +91,7 @@ func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 			result.excluded = append(result.excluded, entry)
 		}
 	}
+	result.indexOrganizations()
 	p.metadata = &result
 	return result, nil
 }
@@ -100,6 +120,10 @@ func (s snapshot) path(entry item) (vault.Path, bool) {
 }
 
 func (s snapshot) resolve(path vault.Path) (item, error) {
+	if len(path) > 0 && path[0] == "Organizations" {
+		return s.resolveOrganizationItem(path)
+	}
+	path = personalPath(path)
 	var matches []item
 	for _, entry := range s.items {
 		candidate, ok := s.path(entry)
@@ -132,6 +156,16 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 	s, err := p.snapshot(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if len(path) == 0 {
+		return []vault.Node{{Path: vault.Path{"Personal"}, Name: "Personal", Kind: vault.FolderNode, Protected: true}, {Path: vault.Path{"Organizations"}, Name: "Organizations", Kind: vault.FolderNode, Protected: true}}, nil
+	}
+	if path[0] == "Organizations" {
+		return s.listOrganizations(path)
+	}
+	personal := path[0] == "Personal"
+	if personal {
+		path = personalPath(path)
 	}
 	folders := map[string]vault.Node{}
 	var nodes []vault.Node
@@ -183,6 +217,11 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 		}
 		return nodes[i].Name < nodes[j].Name
 	})
+	if personal {
+		for i := range nodes {
+			nodes[i].Path = append(vault.Path{"Personal"}, nodes[i].Path...)
+		}
+	}
 	return nodes, nil
 }
 
@@ -282,19 +321,18 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 	if _, err := s.resolve(entry.Path); err != vault.ErrNotFound {
 		return vault.ErrConflict
 	}
+	if entry.Path[0] == "Organizations" {
+		return p.createOrganizationItem(ctx, s, entry)
+	}
+	entry.Path = personalPath(entry.Path)
+	if len(entry.Path) == 0 {
+		return vault.ErrInvalidPath
+	}
 	id, err := p.ensureFolder(ctx, &s, entry.Path[:len(entry.Path)-1])
 	if err != nil {
 		return err
 	}
-	payload := map[string]any{"type": bitwardenType(entry.Type), "name": entry.Path[len(entry.Path)-1], "folderId": id, "notes": entry.Notes}
-	switch entry.Type {
-	case vault.LoginEntry:
-		payload["login"] = map[string]any{"username": entry.Username, "password": entry.Password, "uris": []map[string]string{{"uri": entry.URL}}}
-	case vault.NoteEntry:
-		payload["secureNote"] = map[string]int{"type": 0}
-	default:
-		payload[typeObject(entry.Type)] = entry.Fields
-	}
+	payload := itemPayload(entry, entry.Path[len(entry.Path)-1], id)
 	_, err = p.submit(ctx, []string{"create", "item"}, payload)
 	return err
 }
@@ -313,6 +351,9 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 	existing, err := s.resolve(entry.Path)
 	if err != nil {
 		return err
+	}
+	if existing.Edit != nil && !*existing.Edit {
+		return permissionDenied("edit")
 	}
 	// Fetch and patch the complete object so unknown fields, attachments, custom
 	// fields, TOTP and additional URIs survive value-only edits.
@@ -434,11 +475,18 @@ func (p *Provider) Delete(ctx context.Context, path vault.Path) error {
 	if err != nil {
 		return err
 	}
+	if entry.Edit != nil && !*entry.Edit {
+		return permissionDenied("delete")
+	}
 	_, err = p.run(ctx, []string{"delete", "item", entry.ID}, nil)
 	return err
 }
 
 func (p *Provider) CreateFolder(ctx context.Context, path vault.Path) error {
+	if len(path) > 0 && path[0] == "Organizations" {
+		return vault.ErrUnsupported
+	}
+	path = personalPath(path)
 	if err := validPath(path); err != nil {
 		return err
 	}
@@ -454,6 +502,10 @@ func (p *Provider) CreateFolder(ctx context.Context, path vault.Path) error {
 }
 
 func (p *Provider) DeleteFolder(ctx context.Context, path vault.Path) error {
+	if len(path) > 0 && path[0] == "Organizations" {
+		return vault.ErrUnsupported
+	}
+	path = personalPath(path)
 	if err := validPath(path); err != nil {
 		return err
 	}

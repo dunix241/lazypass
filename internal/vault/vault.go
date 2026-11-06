@@ -92,6 +92,8 @@ const (
 )
 
 type Node struct {
+	Shared    bool
+	Protected bool
 	EntryType EntryType
 	TypeKnown bool
 	Path      Path

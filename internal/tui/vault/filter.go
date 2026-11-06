@@ -54,6 +54,9 @@ func (s *View) handleVaultFilterInput(event *tcell.EventKey) {
 }
 
 func (s *View) searchName(node vault.Node) string {
+	if node.Shared {
+		return node.Name
+	}
 	prefix := s.vaultPath.String()
 	if prefix != "" {
 		prefix += "/"

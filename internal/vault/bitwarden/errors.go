@@ -35,6 +35,8 @@ func classifyFailure(ctx context.Context, output []byte, err error) error {
 	}
 	message = strings.ToLower(message)
 	switch {
+	case strings.Contains(message, "forbidden"), strings.Contains(message, "permission denied"), strings.Contains(message, "not authorized"), strings.Contains(message, "do not have permission"):
+		return &commandFailure{vault.ErrUnsupported, "Your account does not have permission for this Bitwarden operation"}
 	case strings.Contains(message, "not logged in"), strings.Contains(message, "unauthenticated"), strings.Contains(message, "login required"):
 		return &commandFailure{vault.ErrUninitialized, "Bitwarden is signed out; log in with bw using this vault's CLI directory"}
 	case strings.Contains(message, "invalid master password"), strings.Contains(message, "invalid password"):

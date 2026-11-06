@@ -31,9 +31,14 @@ Don't point two accounts at the same `storeDir`.
 
 ## Supported entries
 
-Personal logins, cards, identities, secure notes, and SSH keys are supported.
-Organization items are excluded. Listing requires unlocking
-because Bitwarden encrypts entry names too.
+Logins, cards, identities, secure notes, and SSH keys are supported. Browse personal
+entries under `Personal/`, and shared entries under `Organizations/`, followed by
+their organization and collection. Listing requires unlocking because Bitwarden
+encrypts entry names too.
+
+Shared entries can appear in multiple collections. Editing preserves their
+memberships; deleting a shared entry removes it from every collection. Server
+permissions apply. Manage organizations and collections in Bitwarden/Vaultwarden.
 
 Folder names containing `/` appear as nested folders in lazypass. Editing a
 value preserves additional URLs, custom fields, attachments, and TOTP settings.
