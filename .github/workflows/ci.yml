@@ -40,6 +40,12 @@ jobs:
       - name: Check Go formatting
         run: make fmt-check
       - run: go vet ./...
+      - name: Cross-build Android ARM64 PIE
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: go build -buildmode=pie -o /tmp/lazypass-android .
       - run: go test -race ./...
 
   installer-macos:

@@ -95,7 +95,7 @@ func Inspect(ctx context.Context, path, receiptPath, goos string, runner Runner)
 		result.Method, result.Guidance = "protected", "This destination is in a Cellar directory; update through its original installation method."
 		return result, nil
 	}
-	if goos == "linux" {
+	if goos == "linux" || goos == "android" {
 		queries := []struct {
 			name     string
 			args     []string

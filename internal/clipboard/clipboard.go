@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 )
 
 type dependencies struct {
+	android  bool
 	remote   bool
 	terminal func(string) error
 	wayland  bool
@@ -29,6 +31,7 @@ type dependencies struct {
 // available host/terminal destination locally.
 func Copy(text string) error {
 	return copyWith(text, dependencies{
+		android:  runtime.GOOS == "android",
 		wayland:  os.Getenv("WAYLAND_DISPLAY") != "",
 		remote:   remoteSession(os.Getenv),
 		terminal: copyTerminal,
@@ -73,6 +76,9 @@ func copyWith(text string, deps dependencies) error {
 	}
 	tryCommand := func(name string, args ...string) bool {
 		operation := debug.Operation("clipboard xclip")
+		if name == "termux-clipboard-set" {
+			operation = "clipboard termux"
+		}
 		if name == "wl-copy" {
 			operation = "clipboard wl-copy"
 		}
@@ -91,6 +97,9 @@ func copyWith(text string, deps dependencies) error {
 		debug.Failure(operation, cause)
 		failures = append(failures, fmt.Errorf("%s: %w", name, runErr))
 		return false
+	}
+	if deps.android && tryCommand("termux-clipboard-set") {
+		return nil
 	}
 
 	// wl-copy is the native Wayland path and avoids depending on a toolkit.

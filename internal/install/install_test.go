@@ -135,7 +135,7 @@ func TestStandaloneInstaller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"install-update", "quoted-path", "checksum", "duplicate", "malformed-checksum", "hash-failure", "symlink-archive", "package-owner", "query-failure", "legacy-install", "destination-symlink", "network"} {
+	for _, scenario := range []string{"install-update", "termux", "quoted-path", "checksum", "duplicate", "malformed-checksum", "hash-failure", "symlink-archive", "package-owner", "query-failure", "legacy-install", "destination-symlink", "network"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := t.TempDir()
 			dir, err := filepath.EvalSymlinks(dir)
@@ -148,6 +148,10 @@ func TestStandaloneInstaller(t *testing.T) {
 			}
 			fixtureOS := map[string]string{"linux": "Linux", "darwin": "Darwin"}[runtime.GOOS]
 			fixtureArch := map[string]string{"amd64": "x86_64", "arm64": "arm64"}[runtime.GOARCH]
+			if scenario == "termux" {
+				fixtureOS, fixtureArch = "Android", "arm64"
+				write(t, filepath.Join(tools, "uname"), []byte("#!/bin/sh\ncase \"$1\" in -s) printf 'Linux\\n';; -m) printf 'aarch64\\n';; esac\n"), 0700)
+			}
 			if scenario == "package-owner" || scenario == "query-failure" {
 				fixtureOS = "Linux"
 				write(t, filepath.Join(tools, "uname"), []byte(fmt.Sprintf(`#!/bin/sh
@@ -206,7 +210,7 @@ case "$url" in *.tar.gz) cp "$FIXTURE/archive" "$out";; *sha256.txt) cp "$FIXTUR
 			}
 			target := filepath.Join(bin, "lazypass")
 			old := []byte("old binary survives failure")
-			success := scenario == "install-update" || scenario == "quoted-path" || scenario == "legacy-install"
+			success := scenario == "install-update" || scenario == "quoted-path" || scenario == "legacy-install" || scenario == "termux"
 			if scenario != "install-update" && scenario != "quoted-path" {
 				write(t, target, old, 0700)
 			}
@@ -222,6 +226,9 @@ case "$url" in *.tar.gz) cp "$FIXTURE/archive" "$out";; *sha256.txt) cp "$FIXTUR
 				args := []string{script, "--version", version, "--install-dir", bin}
 				cmd := exec.Command("sh", args...)
 				cmd.Env = append(os.Environ(), "PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"), "HOME="+dir, "XDG_STATE_HOME="+filepath.Join(dir, "state"), "FIXTURE="+dir, "FIXTURE_FAIL="+scenario)
+				if scenario == "termux" {
+					cmd.Env = append(cmd.Env, "TERMUX_VERSION=fixture")
+				}
 				return cmd.CombinedOutput()
 			}
 			out, err := runInstall("v1.0.0")

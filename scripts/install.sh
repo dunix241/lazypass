@@ -88,11 +88,13 @@ sha256() {
 
 detect_platform() {
     os=$(uname -s)
+    if [ "$os" = Linux ] && { [ -n "${TERMUX_VERSION:-}" ] || [ "${PREFIX:-}" = /data/data/com.termux/files/usr ] || [ "${PREFIX:-}" = /data/user/0/com.termux/files/usr ]; }; then
+        os=Android
+    fi
     case "$os" in
-        Linux | Darwin) ;;
+        Linux | Darwin | Android) ;;
         *) die "unsupported operating system: $os" ;;
     esac
-
     arch=$(uname -m)
     if [ "$os" = Darwin ] && [ "$(sysctl -in sysctl.proc_translated 2>/dev/null || :)" = 1 ]; then
         arch=arm64
@@ -102,6 +104,9 @@ detect_platform() {
         arm64 | aarch64) arch=arm64 ;;
         *) die "unsupported architecture: $arch" ;;
     esac
+    if [ "$os" = Android ] && [ "$arch" != arm64 ]; then
+        die "unsupported Android architecture: $arch (arm64 is required)"
+    fi
     asset=lazypass_${os}_${arch}.tar.gz
 }
 
@@ -165,6 +170,9 @@ check_package_ownership() {
             query_owner dpkg-query -S "$target"
             query_owner rpm -qf "$target"
             query_owner apk info --who-owns "$target"
+            ;;
+        Android)
+            query_owner dpkg-query -S "$target"
             ;;
     esac
 }

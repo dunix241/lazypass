@@ -47,8 +47,8 @@ func automatic(ctx context.Context, owner Ownership, version string,
 // ValidateUpdate checks eligibility before any release downloads.
 func (o Ownership) ValidateUpdate() error {
 	switch {
-	case runtime.GOOS != "linux" && runtime.GOOS != "darwin":
-		return errors.New("standalone updates require Linux or macOS; use your package manager or release download")
+	case runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "android":
+		return errors.New("standalone updates require Linux, macOS, or Android/Termux; use your package manager or release download")
 	case o.Method == "package" || o.Method == "protected":
 		return errors.New(o.Guidance)
 	case !filepath.IsAbs(o.Executable) || filepath.Base(o.Executable) != "lazypass":

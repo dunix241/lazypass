@@ -23,7 +23,7 @@ for next time.
 curl -fsSL https://github.com/dunix241/lazypass/releases/latest/download/install.sh | sh
 ```
 
-The installer supports Linux and macOS and installs into `~/.local/bin`.
+The installer supports Linux, macOS, and Android ARM64 in Termux and installs into `~/.local/bin`.
 Windows binaries are available on the [releases page](https://github.com/dunix241/lazypass/releases/latest).
 To build from source, run `make build`; the binary is
 written to `.build/lazypass`.
