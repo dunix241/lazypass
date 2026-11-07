@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"lazypass/internal/process"
 	"lazypass/internal/update"
 )
 
@@ -61,7 +62,7 @@ func ReceiptPath() (string, error) {
 }
 
 func Detect(ctx context.Context) (Ownership, error) {
-	path, err := os.Executable()
+	path, err := process.Executable()
 	if err != nil {
 		return Ownership{}, err
 	}
