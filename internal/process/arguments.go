@@ -7,17 +7,33 @@ import (
 	"runtime"
 )
 
-// ApplicationArgs removes Android's direct-linker prefix, which libc normally
-// skips but a pure-Go executable receives in its original argument stack.
+// ApplicationArgs compensates for Android linker arguments only when the runtime
+// still identifies the linker as the executable. Termux-patched runtimes already
+// normalize these arguments and must be left untouched.
 func ApplicationArgs(goos string, args []string) []string {
-	if goos != "android" || len(args) < 2 || !isAndroidLinker(args[0]) || !filepath.IsAbs(args[1]) {
+	if goos != "android" {
 		return args
 	}
-	return args[1:]
+	executable, err := os.Executable()
+	if err != nil {
+		return args
+	}
+	return launchArgs(executable, os.Getenv("TERMUX_EXEC__PROC_SELF_EXE"), args)
 }
 
-// Executable returns the application rather than the Android linker when the
-// launcher is exposed by /proc/self/exe. Arguments may already be normalized.
+func launchArgs(executable, termuxExecutable string, args []string) []string {
+	if !isAndroidLinker(executable) || len(args) < 2 || !filepath.IsAbs(args[1]) {
+		return args
+	}
+	markedExecutable := filepath.IsAbs(termuxExecutable) && filepath.Clean(args[1]) == filepath.Clean(termuxExecutable)
+	if isAndroidLinker(args[0]) || markedExecutable {
+		return args[1:]
+	}
+	return args
+}
+
+// Executable returns the application rather than the Android linker. Call after
+// normalizing os.Args with ApplicationArgs.
 func Executable() (string, error) {
 	path, err := os.Executable()
 	if err != nil {
@@ -30,7 +46,9 @@ func applicationExecutable(goos, path string, args []string) string {
 	if goos != "android" || !isAndroidLinker(path) {
 		return path
 	}
-	args = ApplicationArgs(goos, args)
+	if len(args) > 0 && isAndroidLinker(args[0]) {
+		args = launchArgs(path, "", args)
+	}
 	if len(args) > 0 && filepath.IsAbs(args[0]) && !isAndroidLinker(args[0]) {
 		return args[0]
 	}
