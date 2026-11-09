@@ -67,6 +67,11 @@ func (s *snapshot) indexOrganizations() {
 	tree := make(map[string][]vault.Node)
 	items := make(map[string]item)
 	collections := make(map[string]collection, len(s.collections))
+	byName := make(map[string][]collection)
+	for _, group := range s.collections {
+		key := group.OrganizationID + "\x00" + group.Name
+		byName[key] = append(byName[key], group)
+	}
 	root := vault.Path{"Organizations"}
 	tree[root.String()] = nil
 	addFolder := func(parent vault.Path, id, name string) vault.Path {
@@ -104,6 +109,10 @@ func (s *snapshot) indexOrganizations() {
 		parent := orgPath
 		for i := 0; i < len(parts)-1; i++ {
 			prefix := strings.Join(parts[:i+1], "/")
+			if matches := byName[group.OrganizationID+"\x00"+prefix]; len(matches) == 1 {
+				parent = vault.Path{"Organizations", group.OrganizationID, matches[0].ID}
+				continue
+			}
 			id := "group-" + base64.RawURLEncoding.EncodeToString([]byte(prefix))
 			virtual := append(append(vault.Path(nil), orgPath...), id)
 			if _, ok := tree[virtual.String()]; !ok {
@@ -188,7 +197,9 @@ func (p *Provider) createOrganizationItem(ctx context.Context, s snapshot, entry
 	payload["organizationId"], payload["collectionIds"] = c.OrganizationID, []string{c.ID}
 	_, err = p.submit(ctx, []string{"create", "item"}, payload)
 	if err == nil {
-		_, err = p.run(ctx, []string{"sync"}, nil)
+		if _, syncErr := p.run(ctx, []string{"sync"}, nil); syncErr != nil {
+			return vault.SavedWarning{Message: "Entry saved, but refresh failed; refresh before retrying creation"}
+		}
 	}
 	return err
 }

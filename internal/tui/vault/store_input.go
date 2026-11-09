@@ -92,10 +92,6 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 				s.notify(shared.Warning, "Enter a valid vault destination")
 				return
 			}
-			if s.locationOnly && strings.HasPrefix(s.location[len(s.location)-1], "group-") {
-				s.notify(shared.Warning, "Select an actual collection before adding an entry")
-				return
-			}
 			provider := s.deps.Service
 			s.run(func(ctx context.Context) error { return provider.CheckNewPath(ctx, path) }, func(err error) {
 				if err != nil {

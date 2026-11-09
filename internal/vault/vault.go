@@ -227,9 +227,12 @@ type MetadataReader interface {
 	DecorateMetadata([]Node)
 }
 
-type SavedWarning struct{}
+type SavedWarning struct{ Message string }
 
-func (SavedWarning) Error() string {
+func (e SavedWarning) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
 	return "Entry saved, but metadata or Git bookkeeping needs repair"
 }
 func (e SavedWarning) UserMessage() string { return e.Error() }

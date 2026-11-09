@@ -2,6 +2,7 @@ package bitwarden
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 
 	"lazypass/internal/vault"
@@ -44,9 +45,34 @@ func (s snapshot) planCreation(path vault.Path) (creationPlan, error) {
 			plan.collectionName += "/" + parts[1:].String()
 		}
 	} else if strings.HasPrefix(parts[0], "group-") {
-		return plan, &commandFailure{vault.ErrInvalidPath, "Select a real collection or enter its name from the organization"}
+		location := vault.Path{"Organizations", org, parts[0]}
+		if _, exists := s.organizationTree[location.String()]; !exists {
+			return plan, vault.ErrNotFound
+		}
+		prefix, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(parts[0], "group-"))
+		if err != nil {
+			return plan, vault.ErrInvalidPath
+		}
+		plan.collectionName = string(prefix)
+		if len(parts) > 1 {
+			plan.collectionName += "/" + parts[1:].String()
+		}
 	} else {
 		plan.collectionName = parts.String()
+	}
+	if _, direct := s.collectionByPath[vault.Path{"Organizations", org, parts[0]}.String()]; !direct || len(parts) > 1 {
+		matches := 0
+		for _, group := range s.collections {
+			if group.OrganizationID == org && group.Name == plan.collectionName {
+				matches++
+				if group.ReadOnly != nil && *group.ReadOnly {
+					return plan, permissionDenied("create")
+				}
+			}
+		}
+		if matches > 1 {
+			return plan, vault.ErrConflict
+		}
 	}
 	for _, entry := range s.excluded {
 		if entry.OrganizationID != org || entry.Name != plan.entryName {
