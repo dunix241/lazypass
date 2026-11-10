@@ -93,6 +93,17 @@ func Plan(ctx context.Context, root *os.Root, path vault.Path, extension string)
 		if !entry.IsDir() {
 			name = strings.TrimSuffix(name, extension)
 		}
+		// pass mv treats an existing directory as a destination container. Reject
+		// logical entry/folder collisions as well as identical filesystem paths.
+		alternate := Directory + "/" + name
+		if entry.IsDir() {
+			alternate += extension
+		}
+		if _, err := root.Lstat(alternate); err == nil {
+			return nil, vault.ErrConflict
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
 		from := append(append(vault.Path(nil), path...), name)
 		to := vault.Path{Directory, name}
 		if from.Validate() != nil || to.Validate() != nil {

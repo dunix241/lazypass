@@ -63,3 +63,39 @@ func TestPlanCancellationAndSymlinkDoNotModifySource(t *testing.T) {
 		t.Fatal("preflight created destination")
 	}
 }
+
+func TestPlanRejectsEntryDirectoryNameCollision(t *testing.T) {
+	for _, sourceFolder := range []bool{false, true} {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "source"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(dir, Directory), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if sourceFolder {
+			if err := os.Mkdir(filepath.Join(dir, "source", "same"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, Directory, "same.gpg"), []byte("fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			if err := os.WriteFile(filepath.Join(dir, "source", "same.gpg"), []byte("fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(dir, Directory, "same"), 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r, err := os.OpenRoot(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Plan(context.Background(), r, vault.Path{"source"}, ".gpg")
+		r.Close()
+		if !errors.Is(err, vault.ErrConflict) {
+			t.Fatalf("logical collision accepted: %v", err)
+		}
+	}
+}
