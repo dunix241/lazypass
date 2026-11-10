@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 
@@ -93,6 +94,7 @@ func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 	}
 	result.indexOrganizations()
 	p.metadata = &result
+	p.browser.Store(&result)
 	return result, nil
 }
 
@@ -120,24 +122,28 @@ func (s snapshot) path(entry item) (vault.Path, bool) {
 }
 
 func (s snapshot) resolve(path vault.Path) (item, error) {
+	if len(path) > 0 && path[0] == "Folders" {
+		return s.resolveFolderItem(path)
+	}
 	if len(path) > 0 && path[0] == "Organizations" {
 		return s.resolveOrganizationItem(path)
 	}
 	path = personalPath(path)
-	var matches []item
+	var match item
+	found := false
 	for _, entry := range s.items {
 		candidate, ok := s.path(entry)
-		if ok && candidate.String() == path.String() {
-			matches = append(matches, entry)
+		if ok && slices.Equal(candidate, path) {
+			if found {
+				return item{}, vault.ErrConflict
+			}
+			match, found = entry, true
 		}
 	}
-	if len(matches) == 0 {
+	if !found {
 		return item{}, vault.ErrNotFound
 	}
-	if len(matches) > 1 {
-		return item{}, vault.ErrConflict
-	}
-	return matches[0], nil
+	return match, nil
 }
 
 func validPath(path vault.Path) error {
@@ -148,17 +154,39 @@ func validPath(path vault.Path) error {
 }
 
 func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := path.Validate(); err != nil {
 		return nil, err
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
+
+	if !p.mu.TryLock() {
+		if cached := p.browser.Load(); cached != nil {
+			return cached.list(path)
+		}
+		p.mu.Lock()
+	}
+
+	if err := ctx.Err(); err != nil {
+		p.mu.Unlock()
+		return nil, err
+	}
 	s, err := p.snapshot(ctx)
+	p.mu.Unlock()
+
 	if err != nil {
 		return nil, err
 	}
+	return s.list(path)
+}
+
+func (s snapshot) list(path vault.Path) ([]vault.Node, error) {
 	if len(path) == 0 {
-		return []vault.Node{{Path: vault.Path{"Personal"}, Name: "Personal", Kind: vault.FolderNode, Protected: true}, {Path: vault.Path{"Organizations"}, Name: "Organizations", Kind: vault.FolderNode, Protected: true}}, nil
+		return []vault.Node{{Path: vault.Path{"Folders"}, Name: "Folders", Kind: vault.FolderNode, Protected: true}, {Path: vault.Path{"Organizations"}, Name: "Organizations", Kind: vault.FolderNode, Protected: true}}, nil
+	}
+	if path[0] == "Folders" {
+		return s.listFolders(path)
 	}
 	if path[0] == "Organizations" {
 		return s.listOrganizations(path)
@@ -324,9 +352,16 @@ func (p *Provider) Create(ctx context.Context, entry vault.Entry) error {
 	if entry.Path[0] == "Organizations" {
 		return p.createOrganizationItem(ctx, s, entry)
 	}
+	entry.Path, err = s.folderNamePath(entry.Path)
+	if err != nil {
+		return err
+	}
 	entry.Path = personalPath(entry.Path)
 	if len(entry.Path) == 0 {
 		return vault.ErrInvalidPath
+	}
+	if err := s.checkFolderDestination(entry.Path); err != nil {
+		return err
 	}
 	id, err := p.ensureFolder(ctx, &s, entry.Path[:len(entry.Path)-1])
 	if err != nil {
@@ -497,8 +532,25 @@ func (p *Provider) CreateFolder(ctx context.Context, path vault.Path) error {
 	if err != nil {
 		return err
 	}
+	path, err = s.folderNamePath(path)
+	if err != nil {
+		return err
+	}
+	if len(path) == 0 {
+		return vault.ErrInvalidPath
+	}
 	_, err = p.ensureFolder(ctx, &s, path)
+	if err == nil {
+		return p.refreshCreatedContainer(ctx)
+	}
 	return err
+}
+
+func (p *Provider) refreshCreatedContainer(ctx context.Context) error {
+	if _, err := p.run(ctx, []string{"sync"}, nil); err != nil {
+		return vault.SavedWarning{Message: "Folder created, but refresh failed; refresh the vault before retrying creation"}
+	}
+	return nil
 }
 
 func (p *Provider) DeleteFolder(ctx context.Context, path vault.Path) error {
@@ -516,15 +568,27 @@ func (p *Provider) DeleteFolder(ctx context.Context, path vault.Path) error {
 	if err != nil {
 		return err
 	}
+	path, err = s.folderNamePath(path)
+	if err != nil {
+		return err
+	}
+	if len(path) == 0 {
+		return vault.ErrInvalidPath
+	}
 	prefix := path.String() + "/"
-	for _, entry := range s.excluded {
-		for _, f := range s.folders {
-			if f.ID == entry.FolderID && (f.Name == path.String() || strings.HasPrefix(f.Name, prefix)) {
+	entries := append(append([]item(nil), s.items...), s.excluded...)
+	for _, entry := range entries {
+		candidate, ok := s.path(entry)
+		if ok && strings.HasPrefix(candidate.String(), prefix) {
+			if entry.Type < 1 || entry.Type > 5 {
 				return vault.ErrUnsupported
+			}
+			if entry.Edit != nil && !*entry.Edit {
+				return permissionDenied("delete")
 			}
 		}
 	}
-	for _, entry := range s.items {
+	for _, entry := range entries {
 		candidate, ok := s.path(entry)
 		if ok && strings.HasPrefix(candidate.String(), prefix) {
 			if _, err := p.run(ctx, []string{"delete", "item", entry.ID}, nil); err != nil {
@@ -540,4 +604,77 @@ func (p *Provider) DeleteFolder(ctx context.Context, path vault.Path) error {
 		}
 	}
 	return nil
+}
+
+func (p *Provider) RemoveFolder(ctx context.Context, path vault.Path) error {
+	if len(path) == 0 || path.Validate() != nil {
+		return vault.ErrInvalidPath
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	defer func() { p.metadata = nil }()
+	s, err := p.deletionSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	if path[0] != "Organizations" {
+		if len(path) == 2 && path[0] == "Folders" {
+			if path[1] == noFolderID {
+				return vault.ErrUnsupported
+			}
+			found := false
+			for _, folder := range s.folders {
+				if folder.ID == path[1] {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return vault.ErrNotFound
+			}
+			if _, err := p.run(ctx, []string{"delete", "folder", path[1]}, nil); err != nil {
+				return err
+			}
+			_, err = p.run(ctx, []string{"sync"}, nil)
+			return err
+		}
+		name := personalPath(path).String()
+		if name == "" {
+			return vault.ErrInvalidPath
+		}
+		var selected *folder
+		for i := range s.folders {
+			if s.folders[i].Name == name {
+				if selected != nil {
+					return vault.ErrConflict
+				}
+				selected = &s.folders[i]
+			}
+		}
+		if selected == nil {
+			return vault.ErrNotFound
+		}
+		// Native folder deletion unassigns its items without deleting them.
+		_, err = p.run(ctx, []string{"delete", "folder", selected.ID}, nil)
+		if err != nil {
+			return err
+		}
+		_, err = p.run(ctx, []string{"sync"}, nil)
+		return err
+	}
+	if len(path) != 3 {
+		return vault.ErrInvalidPath
+	}
+	group, err := s.organizationCollection(path)
+	if err != nil {
+		return err
+	}
+	if group.ReadOnly != nil && *group.ReadOnly {
+		return permissionDenied("delete")
+	}
+	if _, err := p.run(ctx, []string{"delete", "org-collection", group.ID, "--organizationid", group.OrganizationID}, nil); err != nil {
+		return err
+	}
+	_, err = p.run(ctx, []string{"sync"}, nil)
+	return err
 }

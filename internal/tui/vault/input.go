@@ -36,6 +36,10 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 				s.deps.OpenEdit(node.Path)
 			}
 		case 'd':
+			s.deleteRecursive = false
+			s.openDelete()
+		case 'D':
+			s.deleteRecursive = true
 			s.openDelete()
 		case 'a':
 			if s.deps.OpenAdd != nil {

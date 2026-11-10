@@ -14,6 +14,7 @@ func (s *View) refreshProvider() {
 	}
 	s.refreshing = true
 	s.syncing = true
+	s.progress("Refreshing…")
 	provider := s.vault
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
 		if provider.Provider != nil && provider.Provider.Capabilities().Sync {
@@ -38,7 +39,6 @@ func (s *View) refreshProvider() {
 			s.notify(shared.Error, "Unable to refresh vault")
 			return
 		}
-		s.Refresh()
-		s.notify(shared.Success, "Vault refreshed")
+		s.Reconcile("Vault refreshed")
 	})
 }

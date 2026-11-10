@@ -151,7 +151,7 @@ func TestSessionFolderMappingAndPreservingEdit(t *testing.T) {
 		t.Fatalf("probe=%v", err)
 	}
 	nodes, err := p.List(ctx, nil)
-	if err != nil || len(nodes) != 2 || nodes[0].Name != "Personal" || nodes[1].Name != "Organizations" {
+	if err != nil || len(nodes) != 2 || nodes[0].Name != "Folders" || nodes[1].Name != "Organizations" {
 		t.Fatalf("nodes=%v err=%v", nodes, err)
 	}
 	nodes, err = p.List(ctx, vault.Path{"hello"})

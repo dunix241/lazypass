@@ -1,5 +1,9 @@
 # age vault
 
+In the browser, `d` removes a folder and moves its contents, including subfolders,
+to vault-root `Unorganized/`. Existing destinations are never overwritten.
+`Shift+D` deletes recursively.
+
 age provides built-in encryption without installing pass or GPG.
 
 ## Create a vault

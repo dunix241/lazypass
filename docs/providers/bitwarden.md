@@ -32,7 +32,7 @@ Don't point two accounts at the same `storeDir`.
 ## Supported entries
 
 Logins, cards, identities, secure notes, and SSH keys are supported. Browse personal
-entries under `Personal/`, and shared entries under `Organizations/`, followed by
+entries by personal assignment under `Folders/` (including `No Folder/`), and by collection under `Organizations/`, followed by
 their organization and collection. Listing requires unlocking because Bitwarden
 encrypts entry names too.
 
@@ -46,9 +46,10 @@ Entries with duplicate names in the same folder can be listed, but ambiguous
 read/edit/delete operations are rejected; rename them in Bitwarden first.
 
 Changes are sent through `bw` to your server. Deleting an entry uses Bitwarden's
-normal trash behavior. Folder deletion removes supported personal login items
-below it before deleting folders; it is not an atomic operation. Other item
-types cause folder deletion to be rejected so those items are not affected.
+normal trash behavior. In the browser, `d` removes a folder or collection while
+preserving its entries. Accessible entries without a collection appear under
+`Uncollected/`. `Shift+D` deletes the container, nested containers, and entries;
+shared entries are deleted globally. Multi-step deletion is not atomic.
 
 Run `lazypass --vault personal vault sync` to explicitly refresh the CLI's local
 data. Duplicate-name checking uses that local snapshot; another client can still

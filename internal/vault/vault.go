@@ -175,6 +175,19 @@ type BrowserCacheIdentity interface {
 	BrowserCacheIdentity(context.Context) (string, error)
 }
 
+type DeletePlan struct {
+	Target     Path
+	Entries    int
+	Containers int
+	Shared     bool
+	Token      string
+}
+
+type PlannedDeleter interface {
+	PlanDelete(context.Context, Path) (DeletePlan, error)
+	ExecuteDelete(context.Context, DeletePlan) error
+}
+
 type SyncResult struct {
 	Pulled bool
 	Pushed bool
@@ -217,6 +230,10 @@ type Locker interface{ Lock() }
 
 type FolderDeleter interface {
 	DeleteFolder(context.Context, Path) error
+}
+
+type FolderRemover interface {
+	RemoveFolder(context.Context, Path) error
 }
 
 type MetadataWriter interface {

@@ -6,7 +6,7 @@ import (
 	"lazypass/internal/vault"
 )
 
-// Refresh only public type records: no decryption, sync, or provider listing.
+// RefreshMetadata reloads public type records without decryption, sync, or provider listing.
 func (s *View) RefreshMetadata(ctx context.Context) {
 	reader, ok := s.vault.Provider.(vault.MetadataReader)
 	if !ok || s.loading || s.metadataLoading || s.deps.Dispatch == nil || ctx.Err() != nil || len(s.vaultNodes)+len(s.searchNodes) == 0 {

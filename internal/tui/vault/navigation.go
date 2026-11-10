@@ -48,6 +48,13 @@ func (s *View) refresh(selectPath string) {
 		}
 		s.loading = false
 		s.refreshing = false
+		completion := s.refreshCompletion
+		s.refreshCompletion = nil
+		defer func() {
+			if completion != nil {
+				completion(err)
+			}
+		}()
 		if err != nil {
 			if s.vault.Provider == nil {
 				return
@@ -239,6 +246,7 @@ func (s *View) copyVaultEntry() {
 		return
 	}
 	s.copying = true
+	s.progress("Copying…")
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error { return s.vault.CopyPassword(ctx, node.Path) }, func(err error) {
 		s.copying = false
 		if err != nil {

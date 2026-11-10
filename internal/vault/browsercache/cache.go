@@ -17,6 +17,7 @@ import (
 )
 
 const maxBytes = 8 << 20
+const version = 2
 
 type Store struct {
 	Path string
@@ -42,7 +43,7 @@ func (s *Store) Scoped(identity string) *Store {
 }
 
 func (s *Store) load() (document, error) {
-	doc := document{Version: 1, Locations: make(map[string][]vault.Node)}
+	doc := document{Version: version, Locations: make(map[string][]vault.Node)}
 	f, err := os.Open(s.Path)
 	if errors.Is(err, os.ErrNotExist) {
 		return doc, nil
@@ -61,7 +62,7 @@ func (s *Store) load() (document, error) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return doc, err
 	}
-	if doc.Version != 1 || doc.Locations == nil {
+	if doc.Version != version || doc.Locations == nil {
 		return doc, errors.New("invalid browser cache")
 	}
 	for key, nodes := range doc.Locations {
@@ -103,7 +104,7 @@ func (s *Store) Save(path vault.Path, nodes []vault.Node) error {
 		if errors.As(err, &pathErr) {
 			return err
 		}
-		doc = document{Version: 1, Locations: make(map[string][]vault.Node)}
+		doc = document{Version: version, Locations: make(map[string][]vault.Node)}
 	}
 	if existing, ok := doc.Locations[path.String()]; ok && reflect.DeepEqual(existing, nodes) {
 		return nil

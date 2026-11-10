@@ -75,7 +75,7 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 				s.createFolder()
 				return
 			}
-			if s.locationOnly && len(s.location) != 3 && s.entryName == "" {
+			if s.locationOnly && !s.selectedLocation() && s.entryName == "" {
 				s.insertStoreSuggestion()
 				return
 			}
@@ -134,6 +134,7 @@ func (s *StoreForm) store() {
 		}
 	}
 	provider := s.deps.Service
+	s.progress("Saving…")
 	s.run(func(ctx context.Context) error {
 		if editing {
 			return provider.Store(ctx, entry)
@@ -164,7 +165,13 @@ func (s *StoreForm) createFolder() {
 		return
 	}
 	provider := s.deps.Service
+	s.progress("Adding folder…")
 	s.run(func(ctx context.Context) error { return provider.CreateFolder(ctx, path) }, func(err error) {
+		var warning vault.SavedWarning
+		if errors.As(err, &warning) {
+			s.saved(path, warning.UserMessage())
+			return
+		}
 		if err != nil {
 			s.notify(shared.Error, storeErrorMessage(err))
 			return

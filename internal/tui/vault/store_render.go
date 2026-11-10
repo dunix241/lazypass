@@ -13,7 +13,6 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	screen.HideCursor()
 	r, visible := s.storeFormRect(frame.Viewport)
 	colors := frame.Palette
-	shared.DrawBox(screen, r, colors.Focus, colors.Surface)
 	title := " Store generated password "
 	if s.manual {
 		title = " Add to vault "
@@ -21,10 +20,7 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.loadingEntry || s.editEntry != nil {
 		title = " Edit entry "
 	}
-	if s.saving && !s.loadingEntry {
-		title = strings.TrimSpace(title) + " · working… "
-	}
-	shared.PrintAt(screen, r.X+2, r.Y, title, colors.Accent)
+	shared.Panel{Bounds: r, Title: strings.TrimSpace(title), TitleColor: colors.Accent, Border: colors.Focus, Background: colors.Surface}.Draw(screen, nil)
 	if s.locationOnly && s.deps.LocationLabel != nil {
 		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate(s.deps.LocationLabel(s.location), r.W-4), colors.Muted)
 	}
@@ -99,8 +95,8 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	}
 	shared.PrintAt(screen, r.X+2, r.Y+2, "Destination (folder/name):", colors.Muted)
 	if s.locationOnly {
-		label := "Select collection (Tab/Enter; Shift-Tab up):"
-		if len(s.location) == 3 {
+		label := "Select location (Tab/Enter; Shift-Tab up):"
+		if s.selectedLocation() {
 			label = "Entry name (Shift-Tab changes location):"
 		}
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate(label, r.W-4), colors.Muted)

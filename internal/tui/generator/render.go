@@ -15,8 +15,7 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	l := calculateLayout(frame)
 	colors := frame.Palette
 	r := l.card
-	shared.DrawBox(screen, r.shared(), colors.Border, colors.Surface)
-	shared.PrintAt(screen, r.x+2, r.y, " Generate a password ", colors.Accent)
+	shared.Panel{Bounds: r.shared(), Title: "Generate a password", TitleColor: colors.Accent, Border: colors.Border, Background: colors.Surface}.Draw(screen, nil)
 	passwordLabelY, passwordY, meterY, lengthLabelY, charactersY := r.y+2, r.y+3, r.y+4, r.y+6, r.y+9
 	if l.short && !l.compact {
 		passwordLabelY, passwordY, meterY, lengthLabelY, charactersY = r.y+1, r.y+2, r.y+3, r.y+5, r.y+8

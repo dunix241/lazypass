@@ -3,6 +3,10 @@
 Use an existing [pass](https://www.passwordstore.org/) store or create one with
 your GPG key.
 
+In the browser, `d` removes a folder and moves its contents, including subfolders,
+to vault-root `Unorganized/`. Existing destinations are never overwritten. Moved entries
+follow pass recipient rules at their new location. `Shift+D` deletes recursively.
+
 ## Install dependencies
 
 Install pass, GPG, and terminal pinentry:

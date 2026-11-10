@@ -121,6 +121,41 @@ func TestEphemeralVaultIntegration(t *testing.T) {
 	if os.Getenv("LAZYPASS_INTEGRATION_TUI") == "1" {
 		testVaultTerminal(t, home, root, p)
 	}
+	command("gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "", "--quick-generate-key", "removal destination <destination@example.invalid>", "rsa2048", "encr", "1d")
+	destinationKey := ""
+	for _, line := range strings.Split(string(command("gpg", "--batch", "--with-colons", "--list-keys", "destination@example.invalid")), "\n") {
+		parts := strings.Split(line, ":")
+		if len(parts) > 9 && parts[0] == "fpr" {
+			destinationKey = parts[9]
+			break
+		}
+	}
+	if destinationKey == "" {
+		t.Fatal("destination key missing")
+	}
+	command("pass", "init", "--path=Unorganized", destinationKey)
+	command("pass", "init", "--path=removal", fingerprint)
+	for _, path := range []vault.Path{{"removal", "entry"}, {"removal", "nested", "child"}} {
+		if err := p.Create(ctx, vault.Entry{Path: path, Password: "public-preserved-fixture"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := p.RemoveFolder(ctx, vault.Path{"removal"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []vault.Path{{"Unorganized", "entry"}, {"Unorganized", "nested", "child"}} {
+		entry, err := p.Read(ctx, path)
+		if err != nil || entry.Password != "public-preserved-fixture" {
+			t.Fatalf("preserving removal: %v", err)
+		}
+		packets := strings.ToUpper(string(command("gpg", "--batch", "--list-only", "--list-packets", filepath.Join(root, path.String()+".gpg"))))
+		if !strings.Contains(packets, strings.ToUpper(destinationKey[len(destinationKey)-16:])) {
+			t.Fatal("moved ciphertext does not target destination recipient")
+		}
+	}
+	if dirty := string(command("git", "-C", root, "status", "--porcelain")); dirty != "" {
+		t.Fatalf("removal left Git bookkeeping dirty: %s", dirty)
+	}
 }
 
 func testVaultTerminal(t *testing.T, home, root string, p *Provider) {
@@ -209,7 +244,7 @@ os.close(master);os.close(slave)
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)
 	}
-	drive("d|WAITUI:Delete folder|y|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Deleted from vault|q")
+	drive("D|WAITUI:Delete folder|hello|\r|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), nil); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI folder delete: %v %v", nodes, err)
 	}

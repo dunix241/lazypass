@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"lazypass/internal/debug"
@@ -51,6 +52,9 @@ type Provider struct {
 	mu       sync.Mutex
 	session  string
 	metadata *snapshot
+	// Published snapshots are immutable; mutations invalidate metadata but retain
+	// the last browser snapshot until reconciliation or explicit locking.
+	browser atomic.Pointer[snapshot]
 }
 
 func New(dataDir, server string, prompt Prompt, runner Runner) *Provider {
@@ -69,7 +73,13 @@ func (p *Provider) StoreDirectory() string { return p.DataDir }
 func (p *Provider) Capabilities() vault.Capabilities {
 	return vault.Capabilities{Sync: true, Delete: true}
 }
-func (p *Provider) Lock() { p.mu.Lock(); defer p.mu.Unlock(); p.session = ""; p.metadata = nil }
+func (p *Provider) Lock() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.session = ""
+	p.metadata = nil
+	p.browser.Store(nil)
+}
 
 func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extra ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
@@ -99,6 +109,7 @@ func (p *Provider) run(ctx context.Context, args []string, input io.Reader, extr
 		if errors.Is(classified, vault.ErrLocked) || errors.Is(classified, vault.ErrUninitialized) {
 			p.session = ""
 			p.metadata = nil
+			p.browser.Store(nil)
 		}
 		return nil, classified
 	}

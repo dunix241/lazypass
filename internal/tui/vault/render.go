@@ -11,21 +11,12 @@ import (
 func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	defer s.drawDelete(screen, frame)
 	r, colors := frame.Card, frame.Palette
-	shared.DrawBox(screen, r, colors.Border, colors.Surface)
 	path := s.LocationLabel(s.vaultPath)
 	title := "Vault"
 	if s.deps.Name != "" {
 		title += " · " + s.deps.Name
 	}
-	switch {
-	case s.deleting:
-		title += " · deleting…"
-	case s.copying:
-		title += " · copying…"
-	case s.syncing:
-		title += " · refreshing…"
-	}
-	shared.PrintAt(screen, r.X+2, r.Y, shared.Truncate(" "+title+": "+path+" ", r.W-4), colors.Accent)
+	shared.Panel{Bounds: r, Title: title + ": " + path, TitleColor: colors.Accent, Border: colors.Border, Background: colors.Surface}.Draw(screen, nil)
 	if s.vault.Provider == nil {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)
 		return

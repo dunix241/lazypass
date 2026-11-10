@@ -9,6 +9,16 @@ import (
 
 const fieldByteLimit = 64 * 1024
 
+func (s *StoreForm) selectedLocation() bool {
+	if len(s.location) == 0 {
+		return false
+	}
+	if s.location[0] == "Folders" {
+		return len(s.location) >= 2
+	}
+	return len(s.location) >= 3
+}
+
 func (s *StoreForm) editor(key, value string) *input.Editor {
 	if s.editors == nil {
 		s.editors = make(map[string]*input.Editor)

@@ -112,7 +112,7 @@ func (s *StoreForm) insertStoreSuggestion() {
 	if node.Kind != vault.FolderNode {
 		return
 	}
-	if s.locationOnly && len(s.location) >= 3 {
+	if s.locationOnly && s.selectedLocation() {
 		return
 	}
 	if s.locationOnly {

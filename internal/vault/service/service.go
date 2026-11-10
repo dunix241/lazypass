@@ -179,6 +179,21 @@ func (s Service) Delete(ctx context.Context, node vault.Node) error {
 	return nil
 }
 
+func (s Service) RemoveFolder(ctx context.Context, path vault.Path) error {
+	if len(path) == 0 || path.Validate() != nil {
+		return vault.ErrInvalidPath
+	}
+	p, err := s.provider()
+	if err != nil {
+		return err
+	}
+	remover, ok := p.(vault.FolderRemover)
+	if !ok {
+		return vault.ErrUnsupported
+	}
+	return remover.RemoveFolder(ctx, path)
+}
+
 func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
 	if s.Copy == nil {
 		return ErrClipboard

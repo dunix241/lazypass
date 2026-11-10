@@ -2,7 +2,6 @@ package bitwarden
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"io"
 	"testing"
@@ -53,13 +52,12 @@ func TestSavedEntryIsNotReportedAsFailedWhenSyncFails(t *testing.T) {
 	}
 }
 
-func TestCreationFromVirtualGroupAndAmbiguousNames(t *testing.T) {
+func TestCreationByCollectionNameAndAmbiguousNames(t *testing.T) {
 	s := snapshot{organizations: []organization{{ID: "org", Name: "Team"}}, collections: []collection{
 		{ID: "one", OrganizationID: "org", Name: "infra/prod"},
 	}}
 	s.indexOrganizations()
-	group := "group-" + base64.RawURLEncoding.EncodeToString([]byte("infra"))
-	plan, err := s.planCreation(vault.Path{"Organizations", "org", group, "stage", "entry"})
+	plan, err := s.planCreation(vault.Path{"Organizations", "org", "infra", "stage", "entry"})
 	if err != nil || plan.collectionName != "infra/stage" {
 		t.Fatalf("virtual destination: %+v %v", plan, err)
 	}

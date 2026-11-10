@@ -30,6 +30,24 @@ func TestLocationLabelUsesNames(t *testing.T) {
 	}
 }
 
+func TestPersonalFolderUsesRelativeNameInput(t *testing.T) {
+	s := NewStoreForm(StoreDependencies{})
+	s.locationOnly = true
+	s.location = vault.Path{"Folders", "143a64d2-2552-4721-bb82-dc51ed3a4516"}
+	s.storePath = s.location.String() + "/"
+	value, editor, _ := s.activeInput()
+	if *value != "" || editor.Value() != "" {
+		t.Fatal("internal folder ID exposed in name input")
+	}
+	if !s.selectedLocation() {
+		t.Fatal("folder reference not recognized as selected")
+	}
+	s.editInput(tcell.NewEventKey(tcell.KeyRune, 'a', tcell.ModNone))
+	if s.entryName != "a" || s.storePath != s.location.String()+"/a" {
+		t.Fatal("relative destination lost internal reference")
+	}
+}
+
 func TestInvalidOrganizationDestinationDoesNotOpenDetails(t *testing.T) {
 	s := NewStoreForm(StoreDependencies{})
 	s.open, s.locationOnly, s.manual = true, true, true

@@ -88,7 +88,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.generator.Draw(screen, frame)
 		footer = s.generator.Footer(width)
 	}
-	shared.PrintAt(screen, x+max(1, (width-uniseg.StringWidth(footer))/2), y+height-1, footer, s.colors.Muted)
+	shared.PrintActionText(screen, shared.Rect{X: x + 1, Y: y + height - 1, W: max(0, width-2), H: 1}, footer, s.colors.Muted)
 	if s.overlay != noOverlay || s.unlock != nil {
 		screen.HideCursor()
 	}

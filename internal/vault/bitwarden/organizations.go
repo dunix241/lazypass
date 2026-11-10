@@ -80,7 +80,7 @@ func (s *snapshot) indexOrganizations() {
 			return nil
 		}
 		if _, exists := tree[path.String()]; !exists {
-			tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: path, Name: name, Kind: vault.FolderNode, Protected: true})
+			tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: path, Name: name, Kind: vault.FolderNode, Protected: len(path) != 3 || id == "uncollected"})
 			tree[path.String()] = nil
 		}
 		return path
@@ -98,7 +98,7 @@ func (s *snapshot) indexOrganizations() {
 			collections[path.String()] = group
 		}
 	}
-	// Collection IDs remain flat references; visual parents group slash-delimited names.
+	// Attach to the nearest actual ancestor; missing ancestors stay in the label.
 	for _, group := range s.collections {
 		orgPath := vault.Path{"Organizations", group.OrganizationID}
 		original := vault.Path{"Organizations", group.OrganizationID, group.ID}
@@ -107,19 +107,14 @@ func (s *snapshot) indexOrganizations() {
 		}
 		parts := strings.Split(group.Name, "/")
 		parent := orgPath
-		for i := 0; i < len(parts)-1; i++ {
+		labelStart := 0
+		for i := len(parts) - 2; i >= 0; i-- {
 			prefix := strings.Join(parts[:i+1], "/")
 			if matches := byName[group.OrganizationID+"\x00"+prefix]; len(matches) == 1 {
 				parent = vault.Path{"Organizations", group.OrganizationID, matches[0].ID}
-				continue
+				labelStart = i + 1
+				break
 			}
-			id := "group-" + base64.RawURLEncoding.EncodeToString([]byte(prefix))
-			virtual := append(append(vault.Path(nil), orgPath...), id)
-			if _, ok := tree[virtual.String()]; !ok {
-				tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: virtual, Name: parts[i], Kind: vault.FolderNode, Protected: true})
-				tree[virtual.String()] = nil
-			}
-			parent = virtual
 		}
 		if len(parts) > 1 {
 			nodes := tree[orgPath.String()]
@@ -130,7 +125,7 @@ func (s *snapshot) indexOrganizations() {
 				}
 			}
 			tree[orgPath.String()] = nodes
-			tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: original, Name: parts[len(parts)-1], Kind: vault.FolderNode, Protected: true})
+			tree[parent.String()] = append(tree[parent.String()], vault.Node{Path: original, Name: strings.Join(parts[labelStart:], "/"), Kind: vault.FolderNode})
 		}
 	}
 	for _, entry := range s.excluded {
@@ -209,6 +204,22 @@ func (p *Provider) ValidateDestination(ctx context.Context, path vault.Path) err
 		return vault.ErrInvalidPath
 	}
 	if path[0] != "Organizations" {
+		if path[0] == "Folders" {
+			if len(path) < 3 {
+				return vault.ErrInvalidPath
+			}
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			s, err := p.snapshot(ctx)
+			if err != nil {
+				return err
+			}
+			parent, err := s.folderNamePath(path)
+			if err != nil {
+				return err
+			}
+			return s.checkFolderDestination(parent)
+		}
 		if len(personalPath(path)) == 0 {
 			return vault.ErrInvalidPath
 		}
@@ -275,6 +286,9 @@ func (p *Provider) createCollection(ctx context.Context, path vault.Path) error 
 		}
 	}
 	_, err = p.submit(ctx, []string{"create", "org-collection", "--organizationid", path[1]}, map[string]any{"name": name, "organizationId": path[1], "groups": []any{}, "users": []any{}})
+	if err == nil {
+		return p.refreshCreatedContainer(ctx)
+	}
 	return err
 }
 

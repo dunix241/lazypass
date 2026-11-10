@@ -134,10 +134,10 @@ func (s *screen) drawUnlock(screen tcell.Screen, frame shared.Frame) {
 	w := min(52, v.W-2)
 	r := shared.Rect{X: v.X + (v.W-w)/2, Y: v.Y + (v.H-7)/2, W: w, H: 7}
 	colors := frame.Palette
-	shared.DrawBox(screen, r, colors.Focus, colors.Surface)
-	shared.PrintAt(screen, r.X+2, r.Y, " Unlock vault ", colors.Accent)
-	shared.PrintAt(screen, r.X+2, r.Y+2, "Passphrase:", colors.Text)
-	shared.PrintAt(screen, r.X+2, r.Y+3, strings.Repeat("*", min(utf8.RuneCount(s.unlock.value), max(0, r.W-5)))+"_", colors.Focus)
+	shared.Panel{Bounds: r, Title: "Unlock vault", TitleColor: colors.Accent, Border: colors.Focus, Background: colors.Surface}.Draw(screen, func(content shared.Rect) {
+		shared.PrintAt(screen, content.X, content.Y+1, "Passphrase:", colors.Text)
+		shared.PrintAt(screen, content.X, content.Y+2, strings.Repeat("*", min(utf8.RuneCount(s.unlock.value), max(0, content.W-1)))+"_", colors.Focus)
+	})
 }
 
 func (p *unlockPrompt) truncate(end int) {

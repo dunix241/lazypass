@@ -9,6 +9,7 @@ import (
 )
 
 type StoreDependencies struct {
+	Progress      func(string)
 	RunOperation  OperationRunner
 	Service       service.Service
 	Password      func() string
@@ -16,6 +17,7 @@ type StoreDependencies struct {
 	Closed        func()
 	RunPrompted   PromptRunner
 	Saved         func(vault.Path)
+	Reconcile     func(string)
 	LocationLabel func(vault.Path) string
 }
 
@@ -75,6 +77,11 @@ func (s *StoreForm) run(work func(context.Context) error, done func(error)) {
 }
 
 func (s *StoreForm) saved(path vault.Path, message string) {
+	if s.deps.Reconcile != nil {
+		s.Close()
+		s.deps.Reconcile(message)
+		return
+	}
 	if s.deps.Saved != nil {
 		s.deps.Saved(path)
 	}
@@ -102,7 +109,7 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 	s.createParent = append(vault.Path(nil), parent...)
 	s.choosingType = len(s.createActions()) > 1
 	if len(parent) > 0 {
-		if parent[0] == "Organizations" {
+		if parent[0] == "Organizations" || parent[0] == "Folders" {
 			s.location = append(vault.Path(nil), parent...)
 			s.locationOnly = true
 		}

@@ -22,13 +22,19 @@ func (s *screen) activateVault(index int) {
 			s.notify(level, message)
 		}
 	}
+	progress := func(message string) {
+		if s.vaultIndex == index {
+			s.notifyWithDuration(shared.Info, message, -1)
+		}
+	}
 	if s.vaultViews[index] == nil {
 		identity, _ := json.Marshal(struct {
 			ConfigPath, Name string
 			Vaults           any
 		}{s.cfgPath, selected.Name, s.cfg.Vaults})
 		s.vaultViews[index] = vaultui.New(vaultui.Dependencies{
-			Cache: browsercache.New(string(identity)),
+			Progress: progress,
+			Cache:    browsercache.New(string(identity)),
 			Context: func() context.Context {
 				if s.operationContext != nil {
 					return s.operationContext
@@ -53,6 +59,8 @@ func (s *screen) activateVault(index int) {
 	}
 	s.vault = s.vaultViews[index]
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
+		Progress:      progress,
+		Reconcile:     s.vault.Reconcile,
 		LocationLabel: s.vault.LocationLabel,
 		Service:       selected.Service,
 		Password:      s.generator.Password,
@@ -107,24 +115,23 @@ func (s *screen) handleVaultPicker(event *tcell.EventKey) {
 func (s *screen) drawVaultPicker(screen tcell.Screen, frame shared.Frame) {
 	v := frame.Viewport
 	w, h := min(60, v.W-2), min(len(s.vaults)+4, v.H-2)
-	r := shared.Rect{X: v.X + (v.W-w)/2, Y: v.Y + (v.H-h)/2, W: w, H: h}
-	shared.DrawBox(screen, r, frame.Palette.Border, frame.Palette.Surface)
-	shared.PrintAt(screen, r.X+2, r.Y, " Vaults ", frame.Palette.Accent)
-	start := max(0, s.vaultPickerSelected-(h-4)+1)
-	for row := 0; row < h-4 && start+row < len(s.vaults); row++ {
-		i := start + row
-		prefix, color := "  ", frame.Palette.Text
-		if i == s.vaultPickerSelected {
-			prefix, color = "> ", frame.Palette.Focus
+	r := shared.CenteredPanel(v, w, h)
+	shared.Panel{Bounds: r, Title: "Vaults", TitleColor: frame.Palette.Accent, Footer: "↑/↓ select", FooterColor: frame.Palette.Muted, Border: frame.Palette.Border, Background: frame.Palette.Surface}.Draw(screen, func(content shared.Rect) {
+		start := max(0, s.vaultPickerSelected-(h-4)+1)
+		for row := 0; row < h-4 && start+row < len(s.vaults); row++ {
+			i := start + row
+			prefix, color := "  ", frame.Palette.Text
+			if i == s.vaultPickerSelected {
+				prefix, color = "> ", frame.Palette.Focus
+			}
+			item := s.vaults[i]
+			label := prefix + item.Name
+			if item.Service.Provider != nil {
+				label += " (" + item.Service.Provider.Name() + ")"
+			}
+			shared.PrintAt(screen, content.X, content.Y+1+row, shared.Truncate(label, content.W), color)
 		}
-		item := s.vaults[i]
-		label := prefix + item.Name
-		if item.Service.Provider != nil {
-			label += " (" + item.Service.Provider.Name() + ")"
-		}
-		shared.PrintAt(screen, r.X+2, r.Y+2+row, shared.Truncate(label, w-4), color)
-	}
-	shared.PrintPanelFooter(screen, r, "↑/↓ select", frame.Palette.Muted)
+	})
 }
 
 func (s *screen) moveVaultPicker(delta int) {
