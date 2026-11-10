@@ -2,6 +2,7 @@ package vault
 
 import (
 	"context"
+	"image"
 	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
@@ -22,6 +23,11 @@ type StoreDependencies struct {
 }
 
 type StoreForm struct {
+	qrImage              image.Image
+	qrExport             bool
+	qrImport             bool
+	qrPath               string
+	qrCancel             context.CancelFunc
 	createParent         vault.Path
 	actionIndex          int
 	creatingContainer    bool
@@ -120,6 +126,9 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 	return true
 }
 func (s *StoreForm) Close() {
+	if s.qrCancel != nil {
+		s.qrCancel()
+	}
 	if s.cancelSuggestions != nil {
 		s.cancelSuggestions()
 	}

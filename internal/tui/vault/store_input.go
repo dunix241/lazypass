@@ -13,6 +13,14 @@ import (
 )
 
 func (s *StoreForm) HandleKey(event *tcell.EventKey) {
+	if s.qrImage != nil {
+		s.handleQRDisplayKey(event)
+		return
+	}
+	if s.qrImport {
+		s.handleQRKey(event)
+		return
+	}
 	if s.choosingType {
 		switch event.Key() {
 		case tcell.KeyEscape:
@@ -184,6 +192,14 @@ func (s *StoreForm) createFolder() {
 
 func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
 	switch event.Key() {
+	case tcell.KeyF2:
+		if s.entryFields()[s.field].key == "authenticator" {
+			s.qrImport = true
+		}
+	case tcell.KeyF3:
+		if s.entryFields()[s.field].key == "authenticator" {
+			s.showQR()
+		}
 	case tcell.KeyEscape:
 		s.Close()
 	case tcell.KeyBacktab:

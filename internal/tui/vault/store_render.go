@@ -11,6 +11,10 @@ import (
 
 func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	screen.HideCursor()
+	if s.qrImage != nil {
+		s.drawQRDisplay(screen, frame)
+		return
+	}
 	r, visible := s.storeFormRect(frame.Viewport)
 	colors := frame.Palette
 	title := " Store generated password "
@@ -21,6 +25,18 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		title = " Edit entry "
 	}
 	shared.Panel{Bounds: r, Title: strings.TrimSpace(title), TitleColor: colors.Accent, Border: colors.Focus, Background: colors.Surface}.Draw(screen, nil)
+	if s.qrImport {
+		shared.PrintAt(screen, r.X+2, r.Y+2, "Import authenticator QR image", colors.Accent)
+		shared.PrintAt(screen, r.X+2, r.Y+4, "PNG/JPEG file path:", colors.Muted)
+		_, editor, options := s.activeInput()
+		editor.Draw(screen, r.X+2, r.Y+5, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), !s.saving, options)
+		hint := shared.FitHints(r.W-4, "Enter file  •  Ctrl-V image  •  Esc back", "Ctrl-V image  •  Esc back")
+		if s.saving {
+			hint = "Importing…  •  Esc cancel"
+		}
+		shared.PrintPanelFooter(screen, r, hint, colors.Muted)
+		return
+	}
 	if s.locationOnly && s.deps.LocationLabel != nil {
 		shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate(s.deps.LocationLabel(s.location), r.W-4), colors.Muted)
 	}
@@ -57,14 +73,8 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		}
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Entry: "+label, r.W-4), colors.Muted)
 		fields := s.entryFields()
-		extra := 0
-		if fields[s.field].multiline {
-			extra = min(3, max(0, r.H-7))
-		}
-		rows := min(len(fields), max(1, r.H-6-extra))
-		start := max(0, s.field-rows+1)
-		for row := 0; row < rows; row++ {
-			i := start + row
+		for _, row := range s.fieldRows(r) {
+			i := row.index
 			field := fields[i]
 			color := colors.Text
 			focused := i == s.field
@@ -72,21 +82,26 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 				color = colors.Focus
 			}
 			label := field.label + ": "
-			y := r.Y + 4 + row
-			if i > s.field {
-				y += extra
-			}
+			y := row.y
 			shared.PrintAt(screen, r.X+2, y, label, color)
-			x, width := r.X+2+len(label), r.W-4-len(label)
+			x, width := r.X+2+len(label), s.fieldWidth(r, field)
 			options := field.inputOptions()
 			style := tcell.StyleDefault.Foreground(color).Background(colors.Surface)
-			if focused {
-				s.editor(field.key, s.displayField(i)).Draw(screen, x, y, width, 1+extra, style, true, options)
+			for dy := 0; dy < row.height; dy++ {
+				for dx := 0; dx < width; dx++ {
+					screen.SetContent(x+dx, y+dy, ' ', nil, style)
+				}
+			}
+			if focused || field.multiline {
+				s.editor(field.key, s.displayField(i)).Draw(screen, x, y, width, row.height, style, focused, options)
 			} else {
 				input.Preview(screen, x, y, width, s.displayField(i), style, options)
 			}
 		}
 		hint := "<tab> field"
+		if fields[s.field].key == "authenticator" {
+			hint += "  •  F2 import  •  F3 show QR"
+		}
 		if fields[s.field].multiline {
 			hint += "  •  <ctrl-n> newline"
 		}
@@ -102,7 +117,11 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate(label, r.W-4), colors.Muted)
 	}
 	_, editor, options := s.activeInput()
-	editor.Draw(screen, r.X+2, r.Y+3, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), true, options)
+	style := tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface)
+	for dx := 0; dx < r.W-4; dx++ {
+		screen.SetContent(r.X+2+dx, r.Y+3, ' ', nil, style)
+	}
+	editor.Draw(screen, r.X+2, r.Y+3, r.W-4, 1, style, true, options)
 	if s.storeMessage != "" {
 		shared.PrintAt(screen, r.X+2, r.Y+5, shared.Truncate(s.storeMessage, r.W-4), colors.Warning)
 	} else if visible > 0 {

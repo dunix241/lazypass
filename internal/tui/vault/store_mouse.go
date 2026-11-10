@@ -20,12 +20,15 @@ func (s *StoreForm) HandleMouse(action tview.MouseAction, event *tcell.EventMous
 	if s.choosingType {
 		return consume
 	}
+	if s.qrImport || s.qrImage != nil {
+		return consume
+	}
 	if s.editingValue {
-		rows := min(len(s.entryFields()), max(1, r.H-6))
-		start := max(0, s.field-rows+1)
-		field := y - (r.Y + 4)
-		if x >= r.X+2 && x < r.X+r.W-2 && field >= 0 && field < rows {
-			s.selectField(start + field)
+		for _, row := range s.fieldRows(r) {
+			if x >= r.X+2 && x < r.X+r.W-2 && y >= row.y && y < row.y+row.height {
+				s.selectField(row.index)
+				break
+			}
 		}
 		return consume
 	}

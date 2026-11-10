@@ -7,6 +7,7 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/atotto/clipboard v0.1.4
 	github.com/gdamore/tcell/v2 v2.13.10
+	github.com/makiuchi-d/gozxing v0.1.1
 	github.com/pquerna/otp v1.5.0
 	github.com/rivo/tview v0.42.0
 	github.com/rivo/uniseg v0.4.7
@@ -25,4 +26,5 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )

@@ -152,6 +152,13 @@ func (e *Editor) Draw(screen tcell.Screen, x, y, width, height int, style tcell.
 	}
 }
 
+// Rows includes soft wrapping and the trailing cursor line after a full row.
+func (e *Editor) Rows(width int, options Options) int {
+	cells, _, _ := e.layout(max(1, width), options)
+	_, y := endPosition(cells, max(1, width), options.Multiline)
+	return y + 1
+}
+
 // Preview uses the same masking and layout rules without retaining cursor state.
 func Preview(screen tcell.Screen, x, y, width int, value string, style tcell.Style, options Options) {
 	value = strings.ReplaceAll(value, "\n", " ↵ ")
