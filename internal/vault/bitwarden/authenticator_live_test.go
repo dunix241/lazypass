@@ -11,6 +11,7 @@ import (
 
 	"lazypass/internal/otp"
 	"lazypass/internal/vault"
+	"lazypass/internal/vault/service"
 )
 
 // This opt-in test edits only newly created, uniquely identified public fixtures.
@@ -132,6 +133,14 @@ func TestAuthenticatorLive(t *testing.T) {
 					endCode, _, _ := key.Code(end)
 					if err != nil || (code != startCode && code != endCode) {
 						t.Fatal("native code did not match public fixture")
+					}
+					session, err := (service.Service{Provider: p}).LoadAuthenticator(vault.WithoutPrompt(ctx), path)
+					if err != nil {
+						t.Fatal("inline native session failed")
+					}
+					inline, remaining := session.Current(time.Now())
+					if inline == "" || remaining <= 0 || session.Expiry.Unix()%int64(key.Period()/time.Second) != 0 {
+						t.Fatal("inline native timing invalid")
 					}
 					entry.AuthenticatorChanged = false
 					entry.Notes = "Public authenticator preservation fixture"

@@ -1,14 +1,17 @@
 package vault
 
 import (
+	"fmt"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
+	s.authenticators.card = frame.Card
 	defer s.drawDelete(screen, frame)
 	r, colors := frame.Card, frame.Palette
 	path := s.LocationLabel(s.vaultPath)
@@ -64,7 +67,25 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 }
 
 func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.Rect, node vault.Node, y int, selected bool) {
-	shared.PrintAt(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), r.W-4), nodeColor(node, frame.Palette))
+	chip, code, remaining := s.authenticatorChip(node, r, time.Now())
+	labelWidth := r.W - 4
+	if code != "" {
+		labelWidth = chip.X - r.X - 3
+	}
+	shared.PrintAt(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), labelWidth), nodeColor(node, frame.Palette))
+	if code != "" {
+		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Border)
+		for offset, ch := range " " + code + " " {
+			screen.SetContent(chip.X+offset, y, ch, nil, style)
+		}
+		if chip.X+chip.W < r.X+r.W-2 {
+			color := frame.Palette.Muted
+			if remaining <= 5 {
+				color = frame.Palette.Warning
+			}
+			shared.PrintAt(screen, chip.X+chip.W+1, y, fmt.Sprintf("%5ds", remaining), color)
+		}
+	}
 	if selected && s.deleteTarget == nil {
 		screen.ShowCursor(r.X+2, y)
 	}

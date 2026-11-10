@@ -204,6 +204,27 @@ func (p *Provider) ensureUnlocked(ctx context.Context) error {
 	return nil
 }
 
+// UnlockEarly collects input before CLI startup/network latency, then uses the
+// normal status validation and unlock path without persisting the passphrase.
+func (p *Provider) UnlockEarly(ctx context.Context) error {
+	if p.mu.TryLock() {
+		unlocked := p.session != ""
+		p.mu.Unlock()
+		if unlocked {
+			return nil
+		}
+	}
+	password, err := vault.RequestPassphrase(ctx, p.Prompt)
+	if err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.ensureUnlocked(vault.WithPassphrasePrompt(ctx, func(context.Context) (string, error) {
+		return password, nil
+	}))
+}
+
 func (p *Provider) Initialize(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -30,6 +30,8 @@ type Key struct {
 	uri       string
 }
 
+func (k Key) Period() time.Duration { return time.Duration(k.period) * time.Second }
+
 // Parse rejects ambiguous parameters and unsupported formats without echoing input.
 func Parse(value string) (Key, error) {
 	k := Key{period: 30, digits: lib.DigitsSix, algorithm: lib.AlgorithmSHA1}

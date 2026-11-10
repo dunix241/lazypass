@@ -85,6 +85,25 @@ func TestBuiltInPromptChecksStatusBeforeUnlockAndIsNotReused(t *testing.T) {
 	}
 }
 
+func TestEarlyUnlockCollectsPassphraseBeforeCLIAndReusesSession(t *testing.T) {
+	r := &fakeRunner{}
+	p := New(t.TempDir(), "", nil, r)
+	prompts := 0
+	ctx := vault.WithPassphrasePrompt(context.Background(), func(context.Context) (string, error) {
+		prompts++
+		if r.calls != 0 {
+			t.Fatal("early prompt waited for CLI")
+		}
+		return "fixture", nil
+	})
+	if err := p.UnlockEarly(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.UnlockEarly(ctx); err != nil || prompts != 1 || r.unlocks != 1 {
+		t.Fatal("early unlock did not reuse session")
+	}
+}
+
 type signedOutRunner struct{ fakeRunner }
 
 func (r *signedOutRunner) Run(ctx context.Context, args []string, input io.Reader, env []string) ([]byte, error) {

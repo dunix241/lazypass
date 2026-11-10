@@ -2,6 +2,7 @@ package vault
 
 import (
 	"lazypass/internal/tui/shared"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -29,6 +30,12 @@ func (s *View) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, fr
 		index := s.vaultRowAt(x, y, frame.Card)
 		if index < 0 {
 			return shared.MouseResult{}
+		}
+		chip, code, _ := s.authenticatorChip(s.vaultDisplayNodes()[index], frame.Card, time.Now())
+		if code != "" && x >= chip.X && x < chip.X+chip.W {
+			s.vaultSelected = index
+			s.copyEntry(true)
+			return consume
 		}
 		activate := action == tview.MouseLeftDoubleClick || index == s.vaultSelected
 		s.vaultSelected = index

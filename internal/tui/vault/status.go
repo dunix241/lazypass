@@ -7,6 +7,7 @@ import (
 // Reconcile reports success only after the active location's rows are applied.
 // A newer navigation refresh inherits the completion rather than reporting early.
 func (s *View) Reconcile(success string) {
+	s.ClearAuthenticators()
 	s.progress("Refreshing…")
 	s.refreshCompletion = func(err error) {
 		if err != nil {

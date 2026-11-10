@@ -12,6 +12,7 @@ func (s *View) refreshProvider() {
 	if s.refreshing {
 		return
 	}
+	s.ClearAuthenticators()
 	s.refreshing = true
 	s.syncing = true
 	s.progress("Refreshing…")

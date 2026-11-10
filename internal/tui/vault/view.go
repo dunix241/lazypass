@@ -27,6 +27,8 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	awaitingUnlock    bool
+	authenticators    authenticatorState
 	copyCancel        context.CancelFunc
 	refreshCompletion func(error)
 	deletePlan        *vault.DeletePlan

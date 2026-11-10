@@ -30,6 +30,7 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
+	vaultActivation      uint64
 	notificationTimer    *time.Timer
 	notificationDeadline time.Time
 	drawnNotification    *notification.Message
@@ -106,11 +107,13 @@ func (s *screen) Draw(screen tcell.Screen) {
 }
 
 func (s *screen) switchRoute() {
+	s.vaultActivation++
+	s.vault.ClearAuthenticators()
 	s.vault.CancelSearch()
 	s.generator.ReleaseMouse()
 	if s.route == GeneratorRoute {
 		s.route = VaultRoute
-		s.vault.Refresh()
+		s.refreshVaultEarly()
 		return
 	}
 	s.route = GeneratorRoute

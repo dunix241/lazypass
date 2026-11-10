@@ -135,7 +135,7 @@ func (a *App) Run() error {
 		if initialDraw {
 			initialDraw = false
 			if a.screen.route == VaultRoute {
-				a.screen.vault.Refresh()
+				a.screen.refreshVaultEarly()
 			}
 		}
 		return false
@@ -150,6 +150,19 @@ func (a *App) Run() error {
 func (s *screen) scheduleTasks(jobs *task.Scheduler) error {
 	path := s.cfgPath
 	tasks := []task.Task{
+		{ID: "authenticator display", Interval: time.Second, Run: func(ctx context.Context) error {
+			s.dispatch(ctx, func() {
+				if s.vault == nil {
+					return
+				}
+				if s.route != VaultRoute || s.overlay != noOverlay {
+					s.vault.ClearAuthenticators()
+					return
+				}
+				s.vault.TickAuthenticators(ctx)
+			})
+			return nil
+		}},
 		{ID: "config schema sync", Run: func(ctx context.Context) error { return config.SyncSchema(ctx, path) }},
 		{ID: "vault metadata refresh", Delay: 2 * time.Second, Interval: 2 * time.Second, Run: func(ctx context.Context) error {
 			s.dispatch(ctx, func() { s.vault.RefreshMetadata(ctx) })

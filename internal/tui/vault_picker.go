@@ -12,7 +12,9 @@ import (
 )
 
 func (s *screen) activateVault(index int) {
+	s.vaultActivation++
 	if s.vault != nil {
+		s.vault.ClearAuthenticators()
 		s.vault.CancelCopy()
 		s.vault.CancelSearch()
 	}
@@ -99,7 +101,7 @@ func (s *screen) handleVaultPicker(event *tcell.EventKey) {
 		if err := s.saveVaultSelection(); err != nil {
 			s.notify(shared.Warning, "Unable to save selected vault")
 		}
-		s.vault.Refresh()
+		s.refreshVaultEarly()
 		s.overlay = noOverlay
 	case tcell.KeyRune:
 		switch event.Rune() {
@@ -145,6 +147,7 @@ func (s *screen) closeVaults() {
 	s.finishUnlock(unlockReply{err: context.Canceled})
 	for _, view := range s.vaultViews {
 		if view != nil {
+			view.ClearAuthenticators()
 			view.CancelCopy()
 			view.CancelSearch()
 		}

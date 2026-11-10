@@ -48,6 +48,7 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 				s.deps.OpenAdd()
 			}
 		case '/':
+			s.ClearAuthenticators()
 			s.vaultFiltering, s.vaultFilter, s.vaultSelected = true, "", 0
 			s.loadSearchNodes()
 		case 'j':

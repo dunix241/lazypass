@@ -13,6 +13,18 @@ func (s *View) Refresh() {
 	s.refresh("")
 }
 
+// BrowseCached starts metadata loading independently of provider authentication.
+func (s *View) BrowseCached() {
+	s.awaitingUnlock = true
+	s.ClearAuthenticators()
+	s.refresh("")
+}
+
+func (s *View) Authenticated() {
+	s.awaitingUnlock = false
+	s.Refresh()
+}
+
 func (s *View) refresh(selectPath string) {
 	if s.cacheLoading {
 		return
@@ -22,6 +34,12 @@ func (s *View) refresh(selectPath string) {
 	}
 	if len(s.vaultNodes) == 0 {
 		s.restoreCachedLocation()
+	}
+	if s.awaitingUnlock {
+		s.loading = false
+		s.refreshing = false
+		s.selectNodePath(selectPath)
+		return
 	}
 	selectionRestored := s.selectNodePath(selectPath)
 	s.vaultError = ""
@@ -101,6 +119,11 @@ func (s *View) refresh(selectPath string) {
 		}
 		s.vaultSelected = min(s.vaultSelected, max(0, len(s.vaultDisplayNodes())-1))
 		s.selectNodePath(selectPath)
+		if err == nil && s.deps.Context != nil {
+			if ctx := s.deps.Context(); ctx != nil {
+				s.TickAuthenticators(ctx)
+			}
+		}
 	})
 }
 
@@ -144,10 +167,11 @@ func (s *View) loadBrowserCache(selectPath string) bool {
 	}
 	s.cacheLoaded, s.cacheLoading = true, true
 	s.loading = len(s.vaultNodes) == 0
+	cache := s.deps.Cache
+	provider := s.vault.Provider
 	go func() {
-		cache := s.deps.Cache
 		var err error
-		if identity, ok := s.vault.Provider.(vault.BrowserCacheIdentity); ok {
+		if identity, ok := provider.(vault.BrowserCacheIdentity); ok {
 			var account string
 			account, err = identity.BrowserCacheIdentity(ctx)
 			if err == nil {
@@ -182,6 +206,7 @@ func (s *View) loadBrowserCache(selectPath string) bool {
 }
 
 func (s *View) navigate(path vault.Path, selected int, selectPath string) {
+	s.ClearAuthenticators()
 	s.CancelSearch()
 	s.searchNodes, s.searchLoaded = nil, false
 	s.vaultFiltering, s.vaultFilter = false, ""
