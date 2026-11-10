@@ -76,9 +76,8 @@ func TestManualAddCancelAndEditing(t *testing.T) {
 		storeKey(s, tcell.KeyRune, r)
 	}
 	storeKey(s, tcell.KeyEnter, 0)
-	storeKey(s, tcell.KeyEnter, 0)
-	if !s.IsOpen() {
-		t.Fatal("empty value saved")
+	if !s.IsOpen() || !s.editingValue {
+		t.Fatal("value editor did not open")
 	}
 	for _, r := range "secret" {
 		storeKey(s, tcell.KeyRune, r)

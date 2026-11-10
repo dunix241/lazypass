@@ -1,6 +1,8 @@
 package vault
 
 import (
+	"fmt"
+	"lazypass/internal/otp"
 	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
 
@@ -32,7 +34,11 @@ func (s *StoreForm) editor(key, value string) *input.Editor {
 }
 
 func (field entryField) inputOptions() input.Options {
-	return input.Options{Multiline: field.multiline, Secret: field.secret, MaxBytes: fieldByteLimit}
+	limit := fieldByteLimit
+	if field.key == "authenticator" {
+		limit = otp.MaxInput
+	}
+	return input.Options{Multiline: field.multiline, Secret: field.secret, MaxBytes: limit}
 }
 
 func (s *StoreForm) activeInput() (*string, *input.Editor, input.Options) {
@@ -55,7 +61,8 @@ func (s *StoreForm) editInput(event *tcell.EventKey) {
 
 func (s *StoreForm) applyEditor(value *string, editor *input.Editor, err error) {
 	if err != nil {
-		s.notify(shared.Warning, "Value limit is 64 KiB")
+		_, _, options := s.activeInput()
+		s.notify(shared.Warning, fmt.Sprintf("Value limit is %d KiB", options.MaxBytes/1024))
 		return
 	}
 	changed := *value != editor.Value()

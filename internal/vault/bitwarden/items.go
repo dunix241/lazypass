@@ -268,12 +268,23 @@ func (p *Provider) Read(ctx context.Context, path vault.Path) (vault.Entry, erro
 		return vault.Entry{}, err
 	}
 	output, err := p.run(ctx, []string{"get", "item", entry.ID}, nil)
+	defer clear(output)
 	entry, err = decode[item](output, err)
 	if err != nil {
 		return vault.Entry{}, err
 	}
 	result := vault.Entry{Path: append(vault.Path(nil), path...), Password: entry.Login.Password, Username: entry.Login.Username, Notes: entry.Notes}
 	result.Type = entryType(entry.Type)
+	if result.Type == vault.LoginEntry {
+		var access loginAccess
+		if json.Unmarshal(output, &access) != nil {
+			return vault.Entry{}, vault.ErrMalformed
+		}
+		result.AuthenticatorUnavailable = access.unavailable()
+		if !result.AuthenticatorUnavailable && access.Login.TOTP != nil {
+			result.Authenticator = *access.Login.TOTP
+		}
+	}
 	if result.Type != vault.LoginEntry {
 		raw, err := decode[map[string]json.RawMessage](output, nil)
 		if err != nil {
@@ -426,6 +437,9 @@ func (p *Provider) Write(ctx context.Context, entry vault.Entry) error {
 	}
 	login["password"], _ = json.Marshal(entry.Password)
 	login["username"], _ = json.Marshal(entry.Username)
+	if err := patchAuthenticator(raw, login, entry); err != nil {
+		return err
+	}
 	var uris []map[string]json.RawMessage
 	if value, ok := login["uris"]; ok {
 		if err := json.Unmarshal(value, &uris); err != nil {

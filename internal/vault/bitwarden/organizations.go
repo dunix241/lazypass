@@ -296,7 +296,12 @@ func itemPayload(entry vault.Entry, name, folderID string) map[string]any {
 	payload := map[string]any{"type": bitwardenType(entry.Type), "name": name, "folderId": folderID, "notes": entry.Notes}
 	switch entry.Type {
 	case vault.LoginEntry:
-		payload["login"] = map[string]any{"username": entry.Username, "password": entry.Password, "uris": []map[string]string{{"uri": entry.URL}}}
+		payload["login"] = map[string]any{
+			"username": entry.Username,
+			"password": entry.Password,
+			"totp":     entry.Authenticator,
+			"uris":     []map[string]string{{"uri": entry.URL}},
+		}
 	case vault.NoteEntry:
 		payload["secureNote"] = map[string]int{"type": 0}
 	default:

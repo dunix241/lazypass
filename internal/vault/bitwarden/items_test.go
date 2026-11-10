@@ -49,6 +49,8 @@ func (r *fakeRunner) Run(_ context.Context, args []string, input io.Reader, env 
 			return []byte(`{"id":"item-id","type":3,"name":"world","card":{"number":"4111111111111111"}}`), nil
 		}
 		return []byte(`{"id":"item-id","type":1,"name":"world","login":{"password":"fixture","totp":"preserved","uris":[{"uri":"https://one"},{"uri":"https://two"}]},"fields":[{"name":"custom","value":"kept"}]}`), nil
+	case "get totp item-id":
+		return []byte("123456\n"), nil
 	case "edit item item-id":
 		encoded, _ := io.ReadAll(input)
 		data, err := base64.StdEncoding.DecodeString(string(encoded))

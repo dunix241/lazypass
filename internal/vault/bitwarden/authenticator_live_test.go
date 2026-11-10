@@ -1,0 +1,147 @@
+package bitwarden
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"lazypass/internal/otp"
+	"lazypass/internal/vault"
+)
+
+// This opt-in test edits only newly created, uniquely identified public fixtures.
+func TestAuthenticatorLive(t *testing.T) {
+	dir := os.Getenv("LAZYPASS_BW_AUTH_DIR")
+	if dir == "" {
+		t.Skip("set authenticator test directory, server and password file")
+	}
+	p := New(dir, os.Getenv("LAZYPASS_BW_AUTH_SERVER"), func() (string, error) {
+		data, err := os.ReadFile(os.Getenv("LAZYPASS_BW_AUTH_PASSWORD_FILE"))
+		defer clear(data)
+		return strings.TrimRight(string(data), "\r\n"), err
+	}, nil)
+	defer p.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	before, err := p.deletionSnapshot(ctx)
+	if err != nil {
+		t.Fatal("initial synced snapshot failed")
+	}
+	var token [12]byte
+	if _, err := rand.Read(token[:]); err != nil {
+		t.Fatal(err)
+	}
+	name := "lazypass-totp-" + hex.EncodeToString(token[:])
+	created := make(map[string]bool)
+	defer func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer stop()
+		s, err := p.deletionSnapshot(cleanup)
+		if err != nil {
+			t.Error("cleanup snapshot failed")
+			return
+		}
+		for _, item := range append(s.items, s.excluded...) {
+			if created[item.ID] || item.Name == name+"-personal" || item.Name == name+"-organization" {
+				if _, err := p.run(cleanup, []string{"delete", "item", item.ID}, nil); err != nil {
+					t.Error("fixture cleanup failed")
+				}
+			}
+		}
+		after, err := p.deletionSnapshot(cleanup)
+		if err != nil {
+			t.Error("cleanup verification failed")
+			return
+		}
+		remaining := make(map[string]item)
+		for _, item := range append(after.items, after.excluded...) {
+			remaining[item.ID] = item
+			if created[item.ID] || item.Name == name+"-personal" || item.Name == name+"-organization" {
+				t.Error("active fixture remains")
+			}
+		}
+		for _, original := range append(before.items, before.excluded...) {
+			current, ok := remaining[original.ID]
+			if !ok || current.Name != original.Name || current.OrganizationID != original.OrganizationID || current.FolderID != original.FolderID || strings.Join(current.CollectionIDs, ",") != strings.Join(original.CollectionIDs, ",") {
+				t.Error("original entry metadata changed")
+			}
+		}
+	}()
+	for _, organization := range []bool{false, true} {
+		label := "personal"
+		path := vault.Path{"Folders", noFolderID, name + "-personal"}
+		if organization {
+			label = "organization"
+			if len(before.collections) == 0 {
+				t.Error("organization qualification needs an existing accessible collection")
+				continue
+			}
+			group := before.collections[0]
+			path = vault.Path{"Organizations", group.OrganizationID, group.ID, name + "-organization"}
+		}
+		t.Run(label, func(t *testing.T) {
+			const first = "otpauth://totp/PublicFixture?secret=JBSWY3DPEHPK3PXP"
+			const second = "otpauth://totp/PublicFixture?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&algorithm=SHA256&period=60"
+			if err := p.Create(ctx, vault.Entry{Path: path, Authenticator: first}); err != nil {
+				t.Fatal("fixture creation failed")
+			}
+			s, err := p.deletionSnapshot(ctx)
+			if err != nil {
+				t.Fatal("fixture sync failed")
+			}
+			id := ""
+			for _, item := range append(s.items, s.excluded...) {
+				if item.Name == name+"-"+label {
+					id = item.ID
+					created[id] = true
+				}
+			}
+			if id == "" {
+				t.Fatal("fixture ID missing")
+			}
+			path[len(path)-1] = id
+			for _, expected := range []string{first, second, ""} {
+				entry, err := p.Read(ctx, path)
+				if err != nil || entry.Password != "" || entry.Username != "" || entry.AuthenticatorUnavailable {
+					t.Fatal("authenticator-only fixture read failed")
+				}
+				if expected != first {
+					entry.Authenticator = expected
+					entry.AuthenticatorChanged = true
+					if err := p.Write(ctx, entry); err != nil {
+						t.Fatal("fixture authenticator edit failed")
+					}
+					entry, err = p.Read(ctx, path)
+				}
+				if err != nil || entry.Authenticator != expected {
+					t.Fatal("authenticator round trip mismatch")
+				}
+				if expected != "" {
+					key, err := otp.Parse(expected)
+					if err != nil {
+						t.Fatal("public fixture parse failed")
+					}
+					start := time.Now()
+					code, err := p.AuthenticatorCode(ctx, path)
+					end := time.Now()
+					startCode, _, _ := key.Code(start)
+					endCode, _, _ := key.Code(end)
+					if err != nil || (code != startCode && code != endCode) {
+						t.Fatal("native code did not match public fixture")
+					}
+					entry.AuthenticatorChanged = false
+					entry.Notes = "Public authenticator preservation fixture"
+					if err := p.Write(ctx, entry); err != nil {
+						t.Fatal("unrelated edit failed")
+					}
+				} else if _, err := p.AuthenticatorCode(ctx, path); err == nil {
+					t.Fatal("removed authenticator still generated a code")
+				}
+			}
+		})
+	}
+}

@@ -49,6 +49,7 @@ type StoreForm struct {
 	username             string
 	url                  string
 	notes                string
+	authenticator        string
 	field                int
 	editEntry            *vault.Entry
 	suggestions          map[string][]vault.Node
@@ -146,6 +147,7 @@ func (s *StoreForm) OpenEdit(path vault.Path) bool {
 		s.storePath = path.String()
 		s.value = entry.Password
 		s.username, s.url, s.notes = entry.Username, entry.URL, entry.Notes
+		s.authenticator = entry.Authenticator
 		s.entryType = entry.Type
 		s.extraFields = make(map[string]string, len(entry.Fields))
 		for key, value := range entry.Fields {

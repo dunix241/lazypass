@@ -27,6 +27,7 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	copyCancel        context.CancelFunc
 	refreshCompletion func(error)
 	deletePlan        *vault.DeletePlan
 	deleteRecursive   bool
@@ -58,6 +59,12 @@ type View struct {
 	searching         bool
 	deps              Dependencies
 	deleteTarget      *vault.Node
+}
+
+func (s *View) CancelCopy() {
+	if s.copyCancel != nil {
+		s.copyCancel()
+	}
 }
 
 func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }

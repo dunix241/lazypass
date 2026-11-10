@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"lazypass/internal/debug"
+	"lazypass/internal/otp"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 )
@@ -14,6 +15,10 @@ func copyErrorMessage(err error) string {
 		return diagnostic.UserMessage()
 	}
 	switch {
+	case errors.Is(err, otp.ErrInvalid):
+		return "Invalid or unsupported authenticator key"
+	case errors.Is(err, vault.ErrUnsupported):
+		return "Authenticator unavailable or unsupported for this entry"
 	case errors.Is(err, service.ErrEmptyCopy):
 		return "This entry has no value to copy"
 	case errors.Is(err, service.ErrIdentityCopy):

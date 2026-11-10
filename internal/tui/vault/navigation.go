@@ -238,6 +238,10 @@ func (s *View) openVaultNode() {
 	s.copyVaultEntry()
 }
 func (s *View) copyVaultEntry() {
+	s.copyEntry(false)
+}
+
+func (s *View) copyEntry(authenticator bool) {
 	node, ok := s.selectedVaultNode()
 	if !ok || node.Kind != vault.EntryNode {
 		return
@@ -246,9 +250,29 @@ func (s *View) copyVaultEntry() {
 		return
 	}
 	s.copying = true
+	copyContext, cancel := context.WithCancel(context.Background())
+	s.copyCancel = cancel
 	s.progress("Copying…")
-	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error { return s.vault.CopyPassword(ctx, node.Path) }, func(err error) {
+	provider := s.vault
+	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
+		ctx, stop := context.WithCancel(ctx)
+		defer stop()
+		unregister := context.AfterFunc(copyContext, stop)
+		defer unregister()
+		if copyContext.Err() != nil {
+			return context.Canceled
+		}
+		if authenticator {
+			return provider.CopyAuthenticator(ctx, node.Path)
+		}
+		return provider.CopyPassword(ctx, node.Path, copyContext)
+	}, func(err error) {
+		cancel()
+		s.copyCancel = nil
 		s.copying = false
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		if err != nil {
 			var diagnostic vault.Diagnostic
 			if !errors.As(err, &diagnostic) {

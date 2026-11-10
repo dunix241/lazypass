@@ -62,8 +62,26 @@ func TestProtectedVaultLifecycleAndRecovery(t *testing.T) {
 		t.Fatal("restart recovery failed")
 	}
 	got.Password = "updated"
+	got.Authenticator = "otpauth://totp/Fixture?secret=JBSWY3DPEHPK3PXP"
 	if err := restored.Write(ctx, got); err != nil {
 		t.Fatal(err)
+	}
+	got, err = restored.Read(ctx, path)
+	if err != nil || got.Authenticator == "" {
+		t.Fatal("encrypted authenticator did not round trip")
+	}
+	copied := ""
+	s := service.Service{Provider: restored, Copy: func(value string) error { copied = value; return nil }}
+	if err := s.CopyAuthenticator(ctx, path); err != nil || len(copied) != 6 {
+		t.Fatal("age authenticator copy failed")
+	}
+	got.Authenticator = ""
+	if err := restored.Write(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	got, err = restored.Read(ctx, path)
+	if err != nil || got.Authenticator != "" {
+		t.Fatal("removed authenticator survived")
 	}
 	if err := restored.Delete(ctx, path); err != nil {
 		t.Fatal(err)

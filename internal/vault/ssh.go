@@ -22,11 +22,7 @@ func ValidateSSHKey(entry Entry) error {
 	return err
 }
 
-// PrepareEntry validates SSH fields and derives the public key and fingerprint.
-func PrepareEntry(entry Entry) (Entry, error) {
-	if entry.Type != SSHKeyEntry {
-		return entry, nil
-	}
+func prepareSSHKey(entry Entry) (Entry, error) {
 	private := normalizePrivateKey(entry.Fields["privateKey"])
 	if private == "" {
 		return entry, entryValidationError("Enter an SSH private key")

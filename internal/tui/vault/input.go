@@ -28,6 +28,8 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		s.openVaultNode()
 	case tcell.KeyRune:
 		switch event.Rune() {
+		case 'o':
+			s.copyEntry(true)
 		case 'r':
 			s.refreshProvider()
 		case 'e':

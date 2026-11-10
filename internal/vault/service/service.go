@@ -98,6 +98,7 @@ func (s Service) CheckNewPath(ctx context.Context, path vault.Path) error {
 }
 
 func (s Service) Create(ctx context.Context, entry vault.Entry) error {
+	entry.AuthenticatorChanged = entry.Authenticator != ""
 	if !slices.Contains(s.SupportedEntryTypes(), entry.Type) {
 		return vault.ErrUnsupported
 	}
@@ -194,7 +195,7 @@ func (s Service) RemoveFolder(ctx context.Context, path vault.Path) error {
 	return remover.RemoveFolder(ctx, path)
 }
 
-func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
+func (s Service) CopyPassword(ctx context.Context, path vault.Path, guards ...context.Context) error {
 	if s.Copy == nil {
 		return ErrClipboard
 	}
@@ -219,8 +220,19 @@ func (s Service) CopyPassword(ctx context.Context, path vault.Path) error {
 	if value == "" {
 		return ErrEmptyCopy
 	}
+	return s.copyValue(ctx, value, guards...)
+}
+
+// Check the original cancellation sources as well as derived operation contexts:
+// context.AfterFunc propagates cancellation asynchronously.
+func (s Service) copyValue(ctx context.Context, value string, guards ...context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	for _, guard := range guards {
+		if err := guard.Err(); err != nil {
+			return err
+		}
 	}
 	if err := s.Copy(value); err != nil {
 		return ErrClipboard

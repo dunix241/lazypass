@@ -107,23 +107,32 @@ type Node struct {
 }
 
 type Entry struct {
-	Preserved *EntryText `json:"-"`
-	Type      EntryType
-	Path      Path
-	Password  string
-	Username  string
-	URL       string
-	Notes     string
-	Fields    map[string]string
+	Authenticator            string
+	AuthenticatorChanged     bool       `json:"-"`
+	AuthenticatorUnavailable bool       `json:"-"`
+	Preserved                *EntryText `json:"-"`
+	Type                     EntryType
+	Path                     Path
+	Password                 string
+	Username                 string
+	URL                      string
+	Notes                    string
+	Fields                   map[string]string
 }
 
 // EntryText retains externally authored text during password-only updates.
 type EntryText struct {
-	Tail     string
-	Username string
-	URL      string
-	Notes    string
-	Fields   map[string]string
+	Authenticator string
+	Tail          string
+	Username      string
+	URL           string
+	Notes         string
+	Fields        map[string]string
+}
+
+// CodeGenerator owns provider-specific authorization for authenticator generation.
+type CodeGenerator interface {
+	AuthenticatorCode(context.Context, Path) (string, error)
 }
 
 type EntryType uint8

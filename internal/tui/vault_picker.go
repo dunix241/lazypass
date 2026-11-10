@@ -13,6 +13,7 @@ import (
 
 func (s *screen) activateVault(index int) {
 	if s.vault != nil {
+		s.vault.CancelCopy()
 		s.vault.CancelSearch()
 	}
 	s.vaultIndex = index
@@ -144,6 +145,7 @@ func (s *screen) closeVaults() {
 	s.finishUnlock(unlockReply{err: context.Canceled})
 	for _, view := range s.vaultViews {
 		if view != nil {
+			view.CancelCopy()
 			view.CancelSearch()
 		}
 	}

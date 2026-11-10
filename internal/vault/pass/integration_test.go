@@ -103,6 +103,33 @@ func TestEphemeralVaultIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	t.Run("authenticator encrypted round trip", func(t *testing.T) {
+		const uri = "otpauth://totp/Fixture?secret=JBSWY3DPEHPK3PXP"
+		entry.Authenticator = uri
+		if err := p.Write(ctx, entry); err != nil {
+			t.Fatal(err)
+		}
+		output, err := exec.Command("pass", "show", path.String()).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(output)
+		if !strings.HasPrefix(text, entry.Password+"\n") || !strings.Contains(text, "\n"+uri) {
+			t.Fatal("decrypted entry is not pass-otp compatible")
+		}
+		loaded, err := p.Read(ctx, path)
+		if err != nil || loaded.Authenticator != uri {
+			t.Fatal("encrypted authenticator did not round trip")
+		}
+		loaded.Authenticator = ""
+		if err := p.Write(ctx, loaded); err != nil {
+			t.Fatal(err)
+		}
+		text = string(command("pass", "show", path.String()))
+		if strings.Contains(text, "otpauth") {
+			t.Fatal("removed authenticator remains in encrypted entry")
+		}
+	})
 	if err := p.Delete(ctx, path); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +203,7 @@ func testVaultTerminal(t *testing.T, home, root string, p *Provider) {
 master,slave=pty.openpty()
 fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack("HHHH",24,84,0,0))
 before=termios.tcgetattr(slave)
-env=dict(os.environ,TERM="xterm-256color")
+env=dict(os.environ,TERM="xterm-256color",SSH_CONNECTION="fixture")
 def terminal_session():
  os.setsid();fcntl.ioctl(slave,termios.TIOCSCTTY,0)
 p=subprocess.Popen([sys.argv[1],"--config",sys.argv[2],"vault"],stdin=slave,stdout=slave,stderr=slave,env=env,preexec_fn=terminal_session)
@@ -202,6 +229,18 @@ wait_ui("No entries in this folder." if not os.path.isdir(os.path.join(os.enviro
 for key in sys.argv[3].split("|"):
  if key.startswith("WAITUI:"):
   wait_ui(key[len("WAITUI:"):])
+ elif key.startswith("ABSENT:"):
+  assert key[len("ABSENT:"):] not in "\n".join(screen.display),"masked field exposed fixture"
+ elif key.startswith("RESIZE:"):
+  width,height=map(int,key[len("RESIZE:"):].split("x"))
+  fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack("HHHH",height,width,0,0))
+  screen.resize(height,width);p.send_signal(__import__("signal").SIGWINCH);drain(.2)
+ elif key=="CHECKOTP":
+  import base64,re
+  values=re.findall(rb"\x1b\]52;c;([A-Za-z0-9+/=]+)(?:\x07|\x1b\\)",bytes(captured))
+  assert values,"OSC52 copy missing"
+  value=base64.b64decode(values[-1])
+  assert len(value)==6 and value.isdigit(),"OTP clipboard payload invalid"
  elif key.startswith("WAITABSENT:"):
   filename=key[len("WAITABSENT:"):];deadline=time.time()+20
   while os.path.exists(filename) and time.time()<deadline: drain(.05)
@@ -220,7 +259,7 @@ for key in sys.argv[3].split("|"):
  else:
   if len(key)>1: os.write(master,b"\x1b[200~"+key.encode()+b"\x1b[201~")
   else: os.write(master,key.encode())
-  drain(.05)
+  drain(.5 if key=="\x1b" else .05)
 p.wait(timeout=10)
 assert p.returncode==0,p.returncode
 assert termios.tcgetattr(slave)==before,"terminal modes not restored"
@@ -240,6 +279,11 @@ os.close(master);os.close(slave)
 	if err != nil || entry.Password != "public-tui-edited" {
 		t.Fatalf("TUI search/edit failed: %v", err)
 	}
+	entry.Authenticator = "otpauth://totp/Fixture?secret=JBSWY3DPEHPK3PXP"
+	if err := p.Write(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+	drive("l|WAITUI:world|o|WAITUI:Copied to clipboard|CHECKOTP|e|WAITUI:Authenticator|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:40x20|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:84x24|\x1b|q")
 	drive("l|WAITUI:world|d|WAITUI:Delete entry|n|d|WAITUI:Delete entry|y|WAITABSENT:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)

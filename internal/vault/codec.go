@@ -28,11 +28,20 @@ func EncodeEntry(entry Entry) (string, error) {
 		return "", err
 	}
 	if original := entry.Preserved; original != nil {
-		if entry.Username == original.Username && entry.URL == original.URL && entry.Notes == original.Notes && maps.Equal(entry.Fields, original.Fields) {
+		if original.matches(entry) {
 			return entry.Password + original.Tail, nil
 		}
 	}
+	if entry.AuthenticatorUnavailable {
+		return "", ErrUnsupported
+	}
 	lines := []string{entry.Password}
+	if entry.Authenticator != "" {
+		if err := validateEntryValue(entry.Authenticator); err != nil {
+			return "", err
+		}
+		lines = append(lines, entry.Authenticator)
+	}
 	appendField := func(name, value string) error {
 		if err := validateEntryValue(value); err != nil {
 			return err
@@ -47,7 +56,11 @@ func EncodeEntry(entry Entry) (string, error) {
 		notesName = "Lazypass-Notes-Base64"
 		notes = base64.StdEncoding.EncodeToString([]byte(notes))
 	}
-	for _, field := range []struct{ name, value string }{{"Username", entry.Username}, {"URL", entry.URL}, {notesName, notes}} {
+	for _, field := range []struct{ name, value string }{
+		{"Username", entry.Username},
+		{"URL", entry.URL},
+		{notesName, notes},
+	} {
 		if err := appendField(field.name, field.value); err != nil {
 			return "", err
 		}
@@ -69,6 +82,14 @@ func EncodeEntry(entry Entry) (string, error) {
 		}
 	}
 	return strings.Join(lines, "\n") + "\n", nil
+}
+
+func (original *EntryText) matches(entry Entry) bool {
+	return entry.Authenticator == original.Authenticator &&
+		entry.Username == original.Username &&
+		entry.URL == original.URL &&
+		entry.Notes == original.Notes &&
+		maps.Equal(entry.Fields, original.Fields)
 }
 
 func validateEntryValue(value string) error {
@@ -98,7 +119,13 @@ func DecodeEntry(path Path, text string) (Entry, error) {
 	lines := strings.Split(text, "\n")
 	entry := Entry{Path: append(Path(nil), path...), Password: strings.TrimSuffix(lines[0], "\r"), Fields: map[string]string{}}
 	var freeform []string
+	authenticatorCount := 0
 	for _, line := range lines[1:] {
+		if strings.HasPrefix(strings.TrimSuffix(line, "\r"), "otpauth://") {
+			authenticatorCount++
+			entry.Authenticator = strings.TrimSuffix(line, "\r")
+			continue
+		}
 		key, value, ok := strings.Cut(strings.TrimSuffix(line, "\r"), ": ")
 		if !ok || key == "" {
 			freeform = append(freeform, line)
@@ -122,6 +149,13 @@ func DecodeEntry(path Path, text string) (Entry, error) {
 			entry.Fields[key] = value
 		}
 	}
+	if authenticatorCount > 1 {
+		entry.Authenticator = ""
+		entry.AuthenticatorUnavailable = true
+	}
+	if strings.HasPrefix(entry.Password, "otpauth://") {
+		entry.AuthenticatorUnavailable = true
+	}
 	if len(freeform) > 0 {
 		if entry.Notes != "" {
 			entry.Notes += "\n"
@@ -136,7 +170,14 @@ func DecodeEntry(path Path, text string) (Entry, error) {
 		}
 		tail = original[start:]
 	}
-	entry.Preserved = &EntryText{Tail: tail, Username: entry.Username, URL: entry.URL, Notes: entry.Notes, Fields: maps.Clone(entry.Fields)}
+	entry.Preserved = &EntryText{
+		Tail:          tail,
+		Authenticator: entry.Authenticator,
+		Username:      entry.Username,
+		URL:           entry.URL,
+		Notes:         entry.Notes,
+		Fields:        maps.Clone(entry.Fields),
+	}
 	return entry, nil
 }
 

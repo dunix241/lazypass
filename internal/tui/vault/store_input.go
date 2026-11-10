@@ -126,6 +126,8 @@ func (s *StoreForm) store() {
 		entry.Password = password
 	}
 	entry.Username, entry.URL, entry.Notes = s.username, s.url, s.notes
+	entry.AuthenticatorChanged = entry.Authenticator != s.authenticator
+	entry.Authenticator = s.authenticator
 	entry.Type = s.entryType
 	if s.extraFields != nil {
 		entry.Fields = make(map[string]string, len(s.extraFields))
@@ -197,10 +199,6 @@ func (s *StoreForm) handleValueKey(event *tcell.EventKey) {
 	case tcell.KeyTAB:
 		s.selectField((s.field + 1) % len(s.entryFields()))
 	case tcell.KeyEnter:
-		if s.entryType == vault.LoginEntry && s.value == "" {
-			s.notify(shared.Warning, "Enter a value")
-			return
-		}
 		s.store()
 	default:
 		s.editInput(event)
