@@ -18,23 +18,41 @@ import (
 )
 
 type bulkRow struct {
-	record   otp.MigrationRecord
-	name     string
-	selected bool
-	status   string
+	attemptedPath vault.Path
+	created       bool
+	uncertain     bool
+	record        otp.MigrationRecord
+	name          string
+	selected      bool
+	status        string
+}
+
+func (row bulkRow) importable() bool {
+	return row.selected && !row.created && !row.uncertain && row.record.Unsupported == ""
+}
+
+func (row bulkRow) destinationPath(parent vault.Path) (vault.Path, error) {
+	path := append(append(vault.Path(nil), parent...), row.name)
+	if row.name == "" || strings.ContainsAny(row.name, "/\\") || path.Validate() != nil {
+		return nil, vault.ErrInvalidPath
+	}
+	return path, nil
 }
 
 type bulkImport struct {
-	message   string
-	completed atomic.Int32
-	total     int
-	cancel    context.CancelFunc
-	batch     otp.MigrationBatch
-	rows      []bulkRow
-	phase     string
-	text      string
-	index     int
-	changed   bool
+	destination vault.Path
+	folders     []vault.Node
+	folderIndex int
+	message     string
+	completed   atomic.Int32
+	total       int
+	cancel      context.CancelFunc
+	batch       otp.MigrationBatch
+	rows        []bulkRow
+	phase       string
+	text        string
+	index       int
+	changed     bool
 }
 
 func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
@@ -46,6 +64,10 @@ func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
 		return
 	}
 	if event.Key() == tcell.KeyEscape {
+		if b.phase == "destination" {
+			b.phase = "preview"
+			return
+		}
 		if b.phase == "rename" {
 			b.phase = "preview"
 			b.text = ""
@@ -76,7 +98,10 @@ func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
 			b.index = min(len(b.rows)-1, b.index+1)
 		case tcell.KeyEnter:
 			b.phase = "destination"
-			b.text = s.createParent.String()
+			if b.destination == nil {
+				b.destination = append(vault.Path(nil), s.createParent...)
+			}
+			s.loadBulkDestination(b.destination)
 		case tcell.KeyRune:
 			row := &b.rows[b.index]
 			switch event.Rune() {
@@ -85,10 +110,13 @@ func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
 			case 'k':
 				b.index = max(0, b.index-1)
 			case ' ':
-				if row.record.Unsupported == "" {
+				if row.record.Unsupported == "" && !row.created && !row.uncertain {
 					row.selected = !row.selected
 				}
 			case 'r':
+				if row.created || row.uncertain {
+					return
+				}
 				b.phase = "rename"
 				b.text = row.name
 			}
@@ -101,13 +129,17 @@ func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
 			s.editInput(event)
 		}
 	case "destination":
-		if event.Key() == tcell.KeyEnter {
-			s.executeBulk()
-		} else {
-			s.editInput(event)
-		}
+		s.handleBulkDestination(event)
 	case "results":
 		if event.Key() == tcell.KeyRune {
+			if event.Rune() == 'c' {
+				s.reconcileBulk()
+				return
+			}
+			if event.Rune() == 'r' {
+				b.phase = "preview"
+				return
+			}
 			if event.Rune() == 'j' {
 				b.index = min(len(b.rows)-1, b.index+1)
 			}
@@ -226,19 +258,16 @@ func (s *StoreForm) executeBulk() {
 	entries := make([]vault.Entry, 0, len(b.rows))
 	indexes := make([]int, 0, len(b.rows))
 	for i, row := range b.rows {
-		if !row.selected {
+		if !row.importable() {
 			continue
 		}
-		if row.name == "" || strings.ContainsAny(row.name, "/\\") {
-			s.notify(shared.Warning, "Rename invalid entry names before importing")
-			return
-		}
-		path := append(append(vault.Path(nil), parent...), row.name)
-		if path.Validate() != nil {
+		path, err := row.destinationPath(parent)
+		if err != nil {
 			s.notify(shared.Warning, "Rename invalid entry names before importing")
 			return
 		}
 		entries = append(entries, vault.Entry{Path: path, Authenticator: row.record.URI})
+		b.rows[i].attemptedPath = append(vault.Path(nil), path...)
 		indexes = append(indexes, i)
 	}
 	if len(entries) == 0 {
@@ -266,6 +295,11 @@ func (s *StoreForm) executeBulk() {
 		b.cancel = nil
 		for i, index := range indexes {
 			b.rows[index].status = results[i].Status
+			b.rows[index].created = results[i].Created
+			b.rows[index].uncertain = results[i].Uncertain
+			if results[i].Created || results[i].Uncertain {
+				b.rows[index].selected = false
+			}
 			b.changed = b.changed || results[i].Created
 		}
 		b.phase = "results"
@@ -289,14 +323,33 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintPanelFooter(screen, r, "<esc> cancel", frame.Palette.Muted)
 		return
 	}
+	if b.phase == "destination" {
+		label := "/" + b.destination.String()
+		if s.deps.LocationLabel != nil {
+			label = s.deps.LocationLabel(b.destination)
+		}
+		shared.PrintAt(screen, r.X+2, y, shared.Truncate(label, r.W-4), frame.Palette.Muted)
+		y += 2
+		limit := max(1, r.Y+r.H-2-y)
+		start := max(0, b.folderIndex-limit+1)
+		for i := start; i <= len(b.folders) && i < start+limit; i++ {
+			label := "Use this location"
+			if i > 0 {
+				label = b.folders[i-1].Name + "/"
+			}
+			color := frame.Palette.Text
+			if i == b.folderIndex {
+				color = frame.Palette.Focus
+			}
+			shared.PrintAt(screen, r.X+2, y+i-start, shared.Truncate(label, r.W-4), color)
+		}
+		shared.PrintPanelFooter(screen, r, "<CR> next  •  <esc> back", frame.Palette.Muted)
+		return
+	}
 	switch b.phase {
-	case "images", "destination", "rename":
+	case "images", "rename":
 		label := "Google Authenticator export PNG/JPEG:"
 		hint := "<ctrl-v> clipboard  •  <CR> next  •  <esc> cancel"
-		if b.phase == "destination" {
-			label = "Destination folder (current vault):"
-			hint = "<CR> next  •  <esc> cancel"
-		}
 		if b.phase == "rename" {
 			label = "Entry name:"
 			hint = "<CR> next  •  <esc> back"
@@ -363,7 +416,7 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 		}
 		hint := "<space> select  •  r rename  •  <CR> next  •  <esc> cancel"
 		if b.phase == "results" {
-			hint = "<CR> finish  •  <esc> cancel"
+			hint = "r review  •  c reconcile  •  <CR> finish  •  <esc> cancel"
 		}
 		fallback := "<CR> next  •  <esc> cancel"
 		if b.phase == "results" {

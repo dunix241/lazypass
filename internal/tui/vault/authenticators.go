@@ -20,7 +20,7 @@ type authenticatorRow struct {
 
 type authenticatorState struct {
 	rows           map[string]authenticatorRow
-	cancel         context.CancelFunc
+	pending        map[string]context.CancelFunc
 	generation     uint64
 	promptDeclined bool
 	card           shared.Rect
@@ -28,8 +28,8 @@ type authenticatorState struct {
 
 // ClearAuthenticators also rejects results already queued for UI dispatch.
 func (s *View) ClearAuthenticators() {
-	if s.authenticators.cancel != nil {
-		s.authenticators.cancel()
+	for _, cancel := range s.authenticators.pending {
+		cancel()
 	}
 	s.authenticators = authenticatorState{
 		generation: s.authenticators.generation + 1,
@@ -40,11 +40,18 @@ func (s *View) ClearAuthenticators() {
 // TickAuthenticators runs on UI dispatch; provider work runs in a single worker.
 func (s *View) TickAuthenticators(ctx context.Context) {
 	state := &s.authenticators
-	if state.cancel != nil || s.awaitingUnlock || s.loading || s.syncing || s.deleting || s.deps.Dispatch == nil || ctx.Err() != nil {
+	concurrency := 1
+	if provider, ok := s.vault.Provider.(interface{ AuthenticatorConcurrency() int }); ok {
+		concurrency = max(1, min(4, provider.AuthenticatorConcurrency()))
+	}
+	if len(state.pending) >= concurrency || s.awaitingUnlock || s.loading || s.syncing || s.deleting || s.deps.Dispatch == nil || ctx.Err() != nil {
 		return
 	}
 	if state.rows == nil {
 		state.rows = make(map[string]authenticatorRow)
+	}
+	if state.pending == nil {
+		state.pending = make(map[string]context.CancelFunc)
 	}
 	nodes := s.vaultDisplayNodes()
 	_, limit, start := s.vaultListWindow(state.card)
@@ -61,7 +68,14 @@ func (s *View) TickAuthenticators(ctx context.Context) {
 				continue
 			}
 			id := node.Path.String()
+			if state.pending[id] != nil {
+				continue
+			}
 			row, found := state.rows[id]
+			if row.loaded {
+				row.value.UpdateLocal(now)
+				state.rows[id] = row
+			}
 			code, _ := row.value.Current(now)
 			if found && (now.Before(row.retry) || code != "") {
 				continue
@@ -78,17 +92,22 @@ func (s *View) TickAuthenticators(ctx context.Context) {
 				}
 			}
 			work, cancel := context.WithCancel(vault.WithoutPrompt(ctx))
-			state.cancel = cancel
+			state.pending[id] = cancel
 			generation := state.generation
 			provider := s.vault
+			cache := s.deps.Cache
 			path := append(vault.Path(nil), node.Path...)
 			go func() {
 				load := func(request context.Context) error {
-					if row.loaded {
-						return provider.RefreshAuthenticator(request, path, &row.value)
-					}
 					var err error
-					row.value, err = provider.LoadAuthenticator(request, path)
+					if row.loaded {
+						err = provider.RefreshAuthenticator(request, path, &row.value)
+					} else {
+						row.value, err = provider.LoadAuthenticator(request, path)
+					}
+					if request.Err() == nil && work.Err() == nil && (err == nil || errors.Is(err, service.ErrEmptyCopy)) {
+						_ = cache.MarkAuthenticator(path, err == nil)
+					}
 					return err
 				}
 				complete := func(err error) {
@@ -96,11 +115,15 @@ func (s *View) TickAuthenticators(ctx context.Context) {
 					if generation != s.authenticators.generation || work.Err() != nil {
 						return
 					}
-					s.authenticators.cancel = nil
+					delete(s.authenticators.pending, id)
 					if err == nil {
+						s.markAuthenticator(path, true)
 						row.loaded = true
 						row.retry = time.Time{}
 					} else {
+						if errors.Is(err, service.ErrEmptyCopy) {
+							s.markAuthenticator(path, false)
+						}
 						row.value = service.Authenticator{}
 						row.loaded = false
 						row.retry = time.Now().Add(authenticatorRetryDelay(err))
@@ -136,7 +159,9 @@ func (s *View) TickAuthenticators(ctx context.Context) {
 					complete(err)
 				})
 			}()
-			return
+			if len(state.pending) >= concurrency {
+				return
+			}
 		}
 	}
 }
@@ -164,6 +189,9 @@ func authenticatorVisible(path string, nodes []vault.Node) bool {
 func (s *View) authenticatorChip(node vault.Node, card shared.Rect, now time.Time) (shared.Rect, string, int) {
 	row := s.authenticators.rows[node.Path.String()]
 	code, remaining := row.value.Current(now)
+	if code == "" && node.HasAuthenticator && (row.retry.IsZero() || now.After(row.retry)) && card.W >= 24 {
+		return shared.Rect{X: card.X + card.W - 2 - 10, W: 10, H: 1}, "Loading…", 0
+	}
 	if code == "" || card.W < len(code)+14 {
 		return shared.Rect{}, "", 0
 	}
@@ -178,4 +206,15 @@ func (s *View) authenticatorChip(node vault.Node, card shared.Rect, now time.Tim
 	}
 	width := len(code) + 2
 	return shared.Rect{X: card.X + card.W - 2 - validityWidth - width, W: width, H: 1}, code, remaining
+}
+
+func (s *View) markAuthenticator(path vault.Path, present bool) {
+	key := path.String()
+	for _, nodes := range [][]vault.Node{s.vaultNodes, s.searchNodes, s.cachedLocations[s.vaultPath.String()]} {
+		for i := range nodes {
+			if nodes[i].Path.String() == key {
+				nodes[i].HasAuthenticator = present
+			}
+		}
+	}
 }

@@ -119,3 +119,37 @@ func (s *Store) Save(path vault.Path, nodes []vault.Node) error {
 	}
 	return util.WritePrivateFile(s.Path, data)
 }
+
+// MarkAuthenticator updates already cached references without storing entry data.
+func (s *Store) MarkAuthenticator(path vault.Path, present bool) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	doc, err := s.load()
+	if err != nil {
+		return err
+	}
+	changed := false
+	key := path.String()
+	for _, nodes := range doc.Locations {
+		for i := range nodes {
+			if nodes[i].Path.String() == key && nodes[i].HasAuthenticator != present {
+				nodes[i].HasAuthenticator = present
+				changed = true
+			}
+		}
+	}
+	if !changed {
+		return nil
+	}
+	data, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	if len(data) > maxBytes {
+		return errors.New("browser cache exceeds limit")
+	}
+	return util.WritePrivateFile(s.Path, data)
+}

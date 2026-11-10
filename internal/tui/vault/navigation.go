@@ -47,6 +47,12 @@ func (s *View) refresh(selectPath string) {
 	generation := s.loadGeneration
 	path := append(vault.Path(nil), s.vaultPath...)
 	initialSelection := s.vaultSelected
+	knownAuthenticators := make(map[string]bool)
+	for _, node := range s.vaultNodes {
+		if node.HasAuthenticator {
+			knownAuthenticators[node.Path.String()] = true
+		}
+	}
 	_, hasCachedLocation := s.cachedLocations[path.String()]
 	s.loading = len(s.vaultNodes) == 0 && !hasCachedLocation
 	s.refreshing = !s.loading
@@ -54,6 +60,11 @@ func (s *View) refresh(selectPath string) {
 	s.deps.RunOperation.Execute(s.deps.RunPrompted, func(ctx context.Context) error {
 		var err error
 		nodes, err = s.vault.List(ctx, path)
+		if _, native := s.vault.Provider.(vault.CodeGenerator); !native {
+			for i := range nodes {
+				nodes[i].HasAuthenticator = nodes[i].HasAuthenticator || knownAuthenticators[nodes[i].Path.String()]
+			}
+		}
 		if err == nil && s.deps.Cache != nil {
 			if cacheErr := s.deps.Cache.Save(path, nodes); cacheErr != nil {
 				debug.Failure("browser cache save", debug.IO)

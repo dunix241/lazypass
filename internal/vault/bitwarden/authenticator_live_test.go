@@ -87,8 +87,10 @@ func TestAuthenticatorLive(t *testing.T) {
 		t.Run(label, func(t *testing.T) {
 			const first = "otpauth://totp/PublicFixture?secret=JBSWY3DPEHPK3PXP"
 			const second = "otpauth://totp/PublicFixture?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8&algorithm=SHA256&period=60"
-			if err := p.Create(ctx, vault.Entry{Path: path, Authenticator: first}); err != nil {
-				t.Fatal("fixture creation failed")
+			importer := service.Service{Provider: p}
+			results := importer.ImportEntries(ctx, []vault.Entry{{Path: path, Authenticator: first}}, nil)
+			if len(results) != 1 || !results[0].Created {
+				t.Fatal("fixture batch creation failed")
 			}
 			s, err := p.deletionSnapshot(ctx)
 			if err != nil {
@@ -105,6 +107,10 @@ func TestAuthenticatorLive(t *testing.T) {
 				t.Fatal("fixture ID missing")
 			}
 			path[len(path)-1] = id
+			results = importer.ImportEntries(ctx, []vault.Entry{{Path: path, Authenticator: second}}, nil)
+			if results[0].Created || results[0].Uncertain {
+				t.Fatal("existing fixture was overwritten or incorrectly classified")
+			}
 			for _, expected := range []string{first, second, ""} {
 				entry, err := p.Read(ctx, path)
 				if err != nil || entry.Password != "" || entry.Username != "" || entry.AuthenticatorUnavailable {

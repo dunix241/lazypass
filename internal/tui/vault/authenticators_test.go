@@ -54,7 +54,7 @@ func TestInlineAuthenticatorLoadsAndClickCopiesCode(t *testing.T) {
 		t.Fatal("chip click did not copy authenticator")
 	}
 	v.ClearAuthenticators()
-	if _, code, _ := v.authenticatorChip(v.vaultNodes[0], frame.Card, time.Now()); code != "" {
+	if _, code, _ := v.authenticatorChip(v.vaultNodes[0], frame.Card, time.Now()); code != "Loading…" {
 		t.Fatal("cleared session retained displayed code")
 	}
 }
@@ -91,7 +91,7 @@ func TestInlineAuthenticatorStartsUnlockWithoutCopyAction(t *testing.T) {
 		t.Fatal("unlock not requested")
 	}
 	row := v.authenticators.rows["entry"]
-	if prompts != 1 || !row.loaded || row.value.Code == "" || v.authenticators.cancel != nil {
+	if prompts != 1 || !row.loaded || row.value.Code == "" || len(v.authenticators.pending) != 0 {
 		t.Fatal("automatic unlock did not load inline code")
 	}
 }
@@ -112,7 +112,7 @@ func TestInlineAuthenticatorRejectsStaleLoadingResult(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("worker did not finish")
 	}
-	if len(v.authenticators.rows) != 0 || v.authenticators.cancel != nil {
+	if len(v.authenticators.rows) != 0 || len(v.authenticators.pending) != 0 {
 		t.Fatal("stale worker restored session")
 	}
 }
@@ -127,7 +127,7 @@ func TestAuthenticatorQueueHandlesSelectionBeyondShrinkingResults(t *testing.T) 
 	v.vaultNodes = []vault.Node{{Path: vault.Path{"folder"}, Kind: vault.FolderNode}}
 	v.authenticators.card = shared.Rect{W: 80, H: 24}
 	v.TickAuthenticators(context.Background())
-	if v.authenticators.cancel != nil {
+	if len(v.authenticators.pending) != 0 {
 		t.Fatal("folder started secret loading")
 	}
 }

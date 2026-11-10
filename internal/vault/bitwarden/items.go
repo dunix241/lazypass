@@ -7,6 +7,9 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
+
+	"lazypass/internal/otp"
 
 	"lazypass/internal/vault"
 )
@@ -35,14 +38,15 @@ type item struct {
 }
 
 type snapshot struct {
-	organizationTree  map[string][]vault.Node
-	organizationItems map[string]item
-	collectionByPath  map[string]collection
-	organizations     []organization
-	collections       []collection
-	folders           []folder
-	items             []item
-	excluded          []item
+	authenticatorPeriods map[string]time.Duration
+	organizationTree     map[string][]vault.Node
+	organizationItems    map[string]item
+	collectionByPath     map[string]collection
+	organizations        []organization
+	collections          []collection
+	folders              []folder
+	items                []item
+	excluded             []item
 }
 
 func (p *Provider) SupportedEntryTypes() []vault.EntryType {
@@ -64,9 +68,31 @@ func (p *Provider) snapshot(ctx context.Context) (snapshot, error) {
 	if err != nil {
 		return result, err
 	}
-	items, err := decode[[]item](p.run(ctx, []string{"list", "items"}, nil))
+	output, listErr := p.run(ctx, []string{"list", "items"}, nil)
+	defer clear(output)
+	items, err := decode[[]item](output, listErr)
 	if err != nil {
 		return result, err
+	}
+	var authenticators []struct {
+		ID           string `json:"id"`
+		Type         int    `json:"type"`
+		ViewPassword *bool  `json:"viewPassword"`
+		Login        struct {
+			TOTP string `json:"totp"`
+		} `json:"login"`
+	}
+	if json.Unmarshal(output, &authenticators) != nil {
+		return result, vault.ErrMalformed
+	}
+	result.authenticatorPeriods = make(map[string]time.Duration)
+	for _, entry := range authenticators {
+		if entry.Type != 1 || denied(entry.ViewPassword) || entry.Login.TOTP == "" {
+			continue
+		}
+		if key, err := otp.Parse(entry.Login.TOTP); err == nil {
+			result.authenticatorPeriods[entry.ID] = key.Period()
+		}
 	}
 	for _, f := range folders {
 		if f.ID != "" {
@@ -178,7 +204,19 @@ func (p *Provider) List(ctx context.Context, path vault.Path) ([]vault.Node, err
 	if err != nil {
 		return nil, err
 	}
-	return s.list(path)
+	nodes, err := s.list(path)
+	if err != nil {
+		return nil, err
+	}
+	for i := range nodes {
+		if nodes[i].Kind != vault.EntryNode {
+			continue
+		}
+		if entry, err := s.resolve(nodes[i].Path); err == nil {
+			_, nodes[i].HasAuthenticator = s.authenticatorPeriods[entry.ID]
+		}
+	}
+	return nodes, nil
 }
 
 func (s snapshot) list(path vault.Path) ([]vault.Node, error) {

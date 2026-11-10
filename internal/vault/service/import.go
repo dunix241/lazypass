@@ -8,8 +8,9 @@ import (
 )
 
 type ImportResult struct {
-	Status  string
-	Created bool
+	Status    string
+	Created   bool
+	Uncertain bool
 }
 
 // ImportEntries never retries uncertain writes or rolls back confirmed creations.
@@ -50,6 +51,6 @@ func (s Service) importEntry(ctx context.Context, entry vault.Entry) ImportResul
 	case errors.Is(err, vault.ErrConflict):
 		return ImportResult{Status: "Name already exists; not imported"}
 	default:
-		return ImportResult{Status: "Create failed; review destination before retry"}
+		return ImportResult{Status: "Create failed; review destination before retry", Uncertain: true}
 	}
 }

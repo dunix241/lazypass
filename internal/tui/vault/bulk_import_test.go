@@ -133,6 +133,61 @@ func TestBulkRenameEscapePreservesImportProgress(t *testing.T) {
 	}
 }
 
+func TestBulkDestinationBackPreservesReviewAndBlocksDuplicateNames(t *testing.T) {
+	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: &memoryVault{}}})
+	s.open = true
+	s.bulk = &bulkImport{phase: "destination", destination: vault.Path{"target"}, rows: []bulkRow{
+		{name: "same", selected: true},
+		{name: "same", selected: true},
+	}}
+	s.checkBulkConflicts()
+	if s.bulk.phase != "preview" || s.bulk.rows[1].status == "" {
+		t.Fatal("duplicate names reached execution")
+	}
+	s.bulk.phase = "destination"
+	s.handleBulkKey(tcell.NewEventKey(tcell.KeyEscape, 0, 0))
+	if !s.open || s.bulk.phase != "preview" || !s.bulk.rows[0].selected {
+		t.Fatal("destination back lost progress")
+	}
+}
+
+func TestBulkRetryExcludesConfirmedAndUncertainRows(t *testing.T) {
+	p := &memoryVault{}
+	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: p}})
+	s.open = true
+	s.bulk = &bulkImport{phase: "destination", text: "target", rows: []bulkRow{
+		{name: "done", selected: true, created: true},
+		{name: "uncertain", selected: true, uncertain: true},
+		{name: "retry", selected: true, record: otp.MigrationRecord{URI: "otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP"}},
+	}}
+	s.executeBulk()
+	if p.store.Path.String() != "target/retry" || s.bulk.rows[0].status != "" || s.bulk.rows[1].status != "" {
+		t.Fatal("unsafe rows retried")
+	}
+}
+
+func TestBulkEligibilityAndNameValidation(t *testing.T) {
+	for _, row := range []bulkRow{
+		{selected: true, created: true},
+		{selected: true, uncertain: true},
+		{selected: true, record: otp.MigrationRecord{Unsupported: "Unsupported OTP type"}},
+		{},
+	} {
+		if row.importable() {
+			t.Fatal("ineligible row can be imported")
+		}
+	}
+	for _, name := range []string{"", "nested/name", "nested\\name", ".."} {
+		if _, err := (bulkRow{name: name}).destinationPath(vault.Path{"target"}); err == nil {
+			t.Fatal("invalid entry name accepted")
+		}
+	}
+	path, err := (bulkRow{name: "Account 😀"}).destinationPath(vault.Path{"target"})
+	if err != nil || path.String() != "target/Account 😀" {
+		t.Fatal("valid entry name changed")
+	}
+}
+
 func TestBulkCloseRejectsLateImage(t *testing.T) {
 	var work func(context.Context) error
 	var done func(error)

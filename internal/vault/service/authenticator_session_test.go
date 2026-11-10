@@ -14,11 +14,16 @@ func TestAuthenticatorSessionRolloverAndExpiry(t *testing.T) {
 	if err != nil || value.key == nil || value.Expiry.Unix()%37 != 0 {
 		t.Fatal("local session timing invalid")
 	}
-	if code, seconds := value.Current(value.Expiry); code != "" || seconds != 0 {
-		t.Fatal("expired code remained visible")
+	if code, seconds := value.Current(value.Expiry); len(code) != 6 || seconds != 37 {
+		t.Fatal("local rollover did not immediately generate the next code")
 	}
 	if code, seconds := value.Current(value.Expiry.Add(-time.Millisecond)); len(code) != 6 || seconds != 1 {
 		t.Fatal("fractional remaining validity invalid")
+	}
+	previous := value.Expiry
+	value.UpdateLocal(previous)
+	if !value.Expiry.Equal(previous.Add(37*time.Second)) || value.Code == "" {
+		t.Fatal("rollover did not cache new local code")
 	}
 }
 

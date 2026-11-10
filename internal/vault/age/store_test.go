@@ -75,6 +75,22 @@ func TestProtectedVaultLifecycleAndRecovery(t *testing.T) {
 	if err := s.CopyAuthenticator(ctx, path); err != nil || len(copied) != 6 {
 		t.Fatal("age authenticator copy failed")
 	}
+	bulkPath := vault.Path{"hello", "bulk-fixture"}
+	results := s.ImportEntries(ctx, []vault.Entry{{Path: bulkPath, Authenticator: got.Authenticator}}, nil)
+	if len(results) != 1 || !results[0].Created {
+		t.Fatal("age bulk import failed")
+	}
+	results = s.ImportEntries(ctx, []vault.Entry{{Path: bulkPath, Authenticator: got.Authenticator}}, nil)
+	if results[0].Created || results[0].Uncertain {
+		t.Fatal("age bulk conflict was not preserved")
+	}
+	bulk, err := restored.Read(ctx, bulkPath)
+	if err != nil || bulk.Password != "" || bulk.Authenticator != got.Authenticator {
+		t.Fatal("age imported entry did not reopen")
+	}
+	if err := restored.Delete(ctx, bulkPath); err != nil {
+		t.Fatal(err)
+	}
 	got.Authenticator = ""
 	if err := restored.Write(ctx, got); err != nil {
 		t.Fatal(err)

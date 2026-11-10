@@ -133,3 +133,12 @@ func TestAuthenticatorReadPreserveReplaceAndRemove(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthenticatorKeyRequiresNativeAuthorization(t *testing.T) {
+	r := &organizationCodeRunner{denied: true}
+	p := New(t.TempDir(), "", func() (string, error) { return "fixture", nil }, r)
+	_, err := p.AuthenticatorKey(context.Background(), vault.Path{"Organizations", "org-id", "group-a", "item-id"})
+	if err == nil || r.codes != 1 || r.gets != 0 {
+		t.Fatal("seed read bypassed native generation refusal")
+	}
+}

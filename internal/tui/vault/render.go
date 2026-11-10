@@ -73,7 +73,9 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 		labelWidth = chip.X - r.X - 3
 	}
 	shared.PrintAt(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), labelWidth), nodeColor(node, frame.Palette))
-	if code != "" {
+	if code == "Loading…" {
+		shared.PrintAt(screen, chip.X, y, code, frame.Palette.Muted)
+	} else if code != "" {
 		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Border)
 		for offset, ch := range " " + code + " " {
 			screen.SetContent(chip.X+offset, y, ch, nil, style)

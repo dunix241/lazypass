@@ -32,7 +32,7 @@ func (s *View) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, fr
 			return shared.MouseResult{}
 		}
 		chip, code, _ := s.authenticatorChip(s.vaultDisplayNodes()[index], frame.Card, time.Now())
-		if code != "" && x >= chip.X && x < chip.X+chip.W {
+		if code != "" && code != "Loading…" && x >= chip.X && x < chip.X+chip.W {
 			s.vaultSelected = index
 			s.copyEntry(true)
 			return consume

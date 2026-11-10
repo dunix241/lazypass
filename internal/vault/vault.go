@@ -97,13 +97,14 @@ const (
 )
 
 type Node struct {
-	Shared    bool
-	Protected bool
-	EntryType EntryType
-	TypeKnown bool
-	Path      Path
-	Name      string
-	Kind      NodeKind
+	HasAuthenticator bool `json:",omitempty"`
+	Shared           bool
+	Protected        bool
+	EntryType        EntryType
+	TypeKnown        bool
+	Path             Path
+	Name             string
+	Kind             NodeKind
 }
 
 type Entry struct {

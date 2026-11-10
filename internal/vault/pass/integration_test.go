@@ -2,13 +2,22 @@ package pass
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/qr"
 	"lazypass/internal/clipboard"
 	"lazypass/internal/vault"
 )
@@ -241,6 +250,8 @@ for key in sys.argv[3].split("|"):
   assert values,"OSC52 copy missing"
   value=base64.b64decode(values[-1])
   assert len(value)==6 and value.isdigit(),"OTP clipboard payload invalid"
+ elif key.startswith("RAW:"):
+  os.write(master,key[4:].encode());drain(.2)
  elif key.startswith("WAITABSENT:"):
   filename=key[len("WAITABSENT:"):];deadline=time.time()+20
   while os.path.exists(filename) and time.time()<deadline: drain(.05)
@@ -284,6 +295,40 @@ os.close(master);os.close(slave)
 		t.Fatal(err)
 	}
 	drive("l|WAITUI:world|o|WAITUI:Copied to clipboard|CHECKOTP|e|WAITUI:Authenticator|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:40x20|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:84x24|\x1b|q")
+	data, err := hex.DecodeString("0a2a0a1431323334353637383930313233343536373839301205616c6963651a074578616d706c65200128013002100218012000282a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := "otpauth-migration://offline?data=" + url.QueryEscape(base64.StdEncoding.EncodeToString(data))
+	code, err := qr.Encode(uri, qr.M, qr.Auto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scaled, err := barcode.Scale(code, 500, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 580, 580))
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(40, 40, 540, 540), scaled, image.Point{}, draw.Src)
+	imagePath := filepath.Join(home, "migration.png")
+	file, err := os.Create(imagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = png.Encode(file, img)
+	file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	drive("a|WAITUI:Import authenticators|j|j|j|j|j|j|\r|WAITUI:Collect export|" + imagePath + "|\r|WAITUI:Review accounts|r|WAITUI:Entry name|\x15|discarded|\x1b|WAITUI:Review accounts|ABSENT:discarded|\r|WAITUI:Use this location|\x1b|WAITUI:Review accounts|\r|WAITUI:Use this location|\r|WAITUI:Imported|\r|WAITUI:Authenticators imported|q")
+	imported, err := p.Read(context.Background(), vault.Path{"Example - alice"})
+	if err != nil || imported.Password != "" || imported.Authenticator == "" {
+		t.Fatal("PTY bulk import did not create encrypted authenticator")
+	}
+	if err := p.Delete(context.Background(), vault.Path{"Example - alice"}); err != nil {
+		t.Fatal(err)
+	}
 	drive("l|WAITUI:world|d|WAITUI:Delete entry|n|d|WAITUI:Delete entry|y|WAITABSENT:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)

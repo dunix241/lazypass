@@ -8,7 +8,7 @@ import (
 	"lazypass/internal/vault"
 )
 
-// Authenticator retains local key material only when generation is not delegated.
+// Authenticator retains key material only for the unlocked display session.
 type Authenticator struct {
 	key    *otp.Key
 	period time.Duration
@@ -17,6 +17,17 @@ type Authenticator struct {
 }
 
 func (s Service) LoadAuthenticator(ctx context.Context, path vault.Path) (Authenticator, error) {
+	if source, ok := s.Provider.(interface {
+		AuthenticatorKey(context.Context, vault.Path) (otp.Key, error)
+	}); ok {
+		key, err := source.AuthenticatorKey(ctx, path)
+		if err != nil {
+			return Authenticator{}, err
+		}
+		value := Authenticator{key: &key, period: key.Period()}
+		err = s.RefreshAuthenticator(ctx, path, &value)
+		return value, err
+	}
 	entry, err := s.Show(ctx, path)
 	if err != nil {
 		return Authenticator{}, err
@@ -72,8 +83,29 @@ func (s Service) RefreshAuthenticator(ctx context.Context, path vault.Path, valu
 }
 
 func (a Authenticator) Current(now time.Time) (string, int) {
-	if a.Code == "" || !now.Before(a.Expiry) || now.Before(a.Expiry.Add(-a.period)) {
-		return "", 0
+	if a.Code != "" && now.Before(a.Expiry) && !now.Before(a.Expiry.Add(-a.period)) {
+		return a.Code, remainingSeconds(a.Expiry, now)
 	}
-	return a.Code, int((a.Expiry.Sub(now) + time.Second - 1) / time.Second)
+	if a.key != nil {
+		code, expiry, err := a.key.Code(now)
+		if err != nil {
+			return "", 0
+		}
+		return code, remainingSeconds(expiry, now)
+	}
+	return "", 0
+}
+
+func (a *Authenticator) UpdateLocal(now time.Time) {
+	if a.key == nil || (a.Code != "" && now.Before(a.Expiry) && !now.Before(a.Expiry.Add(-a.period))) {
+		return
+	}
+	code, expiry, err := a.key.Code(now)
+	if err == nil {
+		a.Code, a.Expiry = code, expiry
+	}
+}
+
+func remainingSeconds(expiry, now time.Time) int {
+	return int((expiry.Sub(now) + time.Second - 1) / time.Second)
 }

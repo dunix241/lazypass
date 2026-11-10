@@ -49,7 +49,7 @@ type Provider struct {
 	Server   string
 	Prompt   Prompt
 	Runner   Runner
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	session  string
 	metadata *snapshot
 	// Published snapshots are immutable; mutations invalidate metadata but retain
