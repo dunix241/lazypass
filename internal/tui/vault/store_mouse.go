@@ -9,6 +9,9 @@ import (
 
 func (s *StoreForm) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, frame shared.Frame) shared.MouseResult {
 	consume := shared.MouseResult{Consumed: true, Capture: true}
+	if s.bulk != nil {
+		return consume
+	}
 	if s.loadingEntries || s.saving || s.storeMessage != "" {
 		return consume
 	}

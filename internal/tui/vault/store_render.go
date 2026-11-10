@@ -11,6 +11,10 @@ import (
 
 func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	screen.HideCursor()
+	if s.bulk != nil {
+		s.drawBulk(screen, frame)
+		return
+	}
 	if s.qrImage != nil {
 		s.drawQRDisplay(screen, frame)
 		return

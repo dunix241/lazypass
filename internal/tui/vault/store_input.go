@@ -13,6 +13,10 @@ import (
 )
 
 func (s *StoreForm) HandleKey(event *tcell.EventKey) {
+	if s.bulk != nil {
+		s.handleBulkKey(event)
+		return
+	}
 	if s.qrImage != nil {
 		s.handleQRDisplayKey(event)
 		return

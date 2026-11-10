@@ -28,70 +28,94 @@ var (
 
 // ImportQR never returns decoder or filesystem errors that may contain input.
 func ImportQR(ctx context.Context, path string) (string, error) {
-	if err := ctx.Err(); err != nil {
+	values, err := ReadQRImage(ctx, path)
+	if err != nil {
 		return "", err
+	}
+	return singleQR(values)
+}
+
+func ReadQRImage(ctx context.Context, path string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
-		return "", ErrQRFile
+		return nil, ErrQRFile
 	}
 	if info.Size() > maxImageBytes {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return "", ErrQRFile
+		return nil, ErrQRFile
 	}
 	defer file.Close()
 	info, err = file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return "", ErrQRFile
+		return nil, ErrQRFile
 	}
 	if info.Size() > maxImageBytes {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
 	defer clear(data)
 	if err != nil || len(data) > maxImageBytes {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
-	return DecodeQR(ctx, data)
+	return DecodeQRValues(ctx, data)
 }
 
 // DecodeQR applies the same image bounds and validation to file and clipboard data.
 func DecodeQR(ctx context.Context, data []byte) (string, error) {
-	if err := ctx.Err(); err != nil {
+	values, err := DecodeQRValues(ctx, data)
+	if err != nil {
 		return "", err
 	}
+	return singleQR(values)
+}
+
+func DecodeQRValues(ctx context.Context, data []byte) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(data) > maxImageBytes {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || (format != "png" && format != "jpeg") || config.Width <= 0 || config.Height <= 0 || config.Width > maxImagePixels/config.Height {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	bitmap, err := gozxing.NewBinaryBitmapFromImage(img)
 	if err != nil {
-		return "", ErrQRImage
+		return nil, ErrQRImage
 	}
 	results, err := qr.NewQRCodeMultiReader().DecodeMultiple(bitmap, nil)
 	if err := ctx.Err(); err != nil {
-		return "", err
+		return nil, err
 	}
 	if err != nil || len(results) == 0 {
-		return "", ErrQRMissing
+		return nil, ErrQRMissing
 	}
-	if len(results) != 1 {
+	values := make([]string, len(results))
+	for i, result := range results {
+		values[i] = result.GetText()
+	}
+	return values, nil
+}
+
+func singleQR(values []string) (string, error) {
+	if len(values) != 1 {
 		return "", ErrQRMultiple
 	}
-	value := results[0].GetText()
+	value := values[0]
 	key, err := Parse(value)
 	if err != nil || key.uri == "" {
 		return "", ErrInvalid

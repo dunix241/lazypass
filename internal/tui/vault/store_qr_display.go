@@ -91,7 +91,12 @@ func (s *StoreForm) drawQRDisplay(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	if r.W < w || r.H < h {
-		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Terminal too small; export PNG instead", r.W-4), frame.Palette.Muted)
+		for i, line := range shared.WrapText("Terminal too small; export PNG instead", r.W-4) {
+			if i >= r.H-4 {
+				break
+			}
+			shared.PrintAt(screen, r.X+2, r.Y+2+i, line, frame.Palette.Muted)
+		}
 	} else {
 		for y := 0; y < b.Dy(); y += 2 {
 			for x := 0; x < b.Dx(); x++ {

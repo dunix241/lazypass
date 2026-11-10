@@ -23,6 +23,7 @@ type StoreDependencies struct {
 }
 
 type StoreForm struct {
+	bulk                 *bulkImport
 	qrImage              image.Image
 	qrExport             bool
 	qrImport             bool
@@ -126,6 +127,9 @@ func (s *StoreForm) OpenAdd(parent vault.Path) bool {
 	return true
 }
 func (s *StoreForm) Close() {
+	if s.bulk != nil && s.bulk.cancel != nil {
+		s.bulk.cancel()
+	}
 	if s.qrCancel != nil {
 		s.qrCancel()
 	}

@@ -40,10 +40,10 @@ func TestVaultAddSelectsCardAndStoresFields(t *testing.T) {
 	}
 }
 
-func TestLoginOnlyProviderSkipsTypePicker(t *testing.T) {
+func TestLoginOnlyProviderOffersLoginAndBulkImport(t *testing.T) {
 	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: &memoryVault{}}})
 	s.OpenAdd(nil)
-	if s.choosingType || s.entryType != vault.LoginEntry {
+	if !s.choosingType || s.entryType != vault.LoginEntry || len(s.createActions()) != 2 || !s.createActions()[1].bulk {
 		t.Fatal("unsupported types offered")
 	}
 }

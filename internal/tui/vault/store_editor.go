@@ -42,6 +42,9 @@ func (field entryField) inputOptions() input.Options {
 }
 
 func (s *StoreForm) activeInput() (*string, *input.Editor, input.Options) {
+	if s.bulk != nil {
+		return &s.bulk.text, s.editor("bulk-"+s.bulk.phase, s.bulk.text), input.Options{MaxBytes: fieldByteLimit}
+	}
 	if s.qrImport || s.qrExport {
 		return &s.qrPath, s.editor("qr-path", s.qrPath), input.Options{MaxBytes: fieldByteLimit}
 	}
