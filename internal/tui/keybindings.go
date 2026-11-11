@@ -107,11 +107,7 @@ func (s *screen) handleKeybindings(event *tcell.EventKey) {
 func (s *screen) drawKeybindings(screen tcell.Screen, frame shared.Frame) {
 	k := &s.keybindings
 	r := shared.CenteredPanel(frame.Viewport, 70, min(24, frame.Viewport.H-2))
-	mode := "off"
-	if s.cfg.Compact {
-		mode = "on"
-	}
-	shared.Panel{Bounds: r, Title: "Keybindings · compact " + mode, Border: frame.Palette.Focus, TitleColor: frame.Palette.Focus, Background: frame.Palette.Surface, Footer: "/ filter  •  z compact  •  <esc> back", FooterColor: frame.Palette.Muted}.Draw(screen, func(content shared.Rect) {
+	shared.Panel{Bounds: r, Title: "Keybindings", Border: frame.Palette.Focus, TitleColor: frame.Palette.Focus, Background: frame.Palette.Surface, Footer: "/ filter  •  <esc> back", FooterColor: frame.Palette.Muted}.Draw(screen, func(content shared.Rect) {
 		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Surface)
 		if k.filtering {
 			shared.PrintAt(screen, content.X, content.Y, "/ ", frame.Palette.Muted)

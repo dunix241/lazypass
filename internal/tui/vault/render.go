@@ -78,7 +78,8 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 		labelWidth = chip.X - r.X - 3
 	}
 	background := frame.Palette.Surface
-	if s.marks[markID(node)] {
+	marked := s.marks[markID(node)]
+	if marked {
 		background = frame.Palette.Border
 		style := tcell.StyleDefault.Background(background)
 		for x := r.X + 2; x < r.X+r.W-2; x++ {
@@ -96,26 +97,25 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 			suffix = " (cut)"
 		}
 		label = shared.Truncate(label, max(0, labelWidth-len(suffix)))
-		shared.PrintStyled(screen, r.X+2+uniseg.StringWidth(label), y, shared.Truncate(suffix, labelWidth-uniseg.StringWidth(label)), style.Foreground(frame.Palette.Muted))
+		labelCells := uniseg.StringWidth(label)
+		shared.PrintStyled(screen, r.X+2+labelCells, y, shared.Truncate(suffix, labelWidth-labelCells), style.Foreground(frame.Palette.Muted))
 	}
 	shared.PrintStyled(screen, r.X+2, y, shared.Truncate(label, labelWidth), style)
 	if code == "Loading…" {
 		shared.PrintStyled(screen, chip.X, y, code, tcell.StyleDefault.Foreground(frame.Palette.Muted).Background(background))
 	} else if code != "" {
 		chipBackground := frame.Palette.Border
-		if s.marks[markID(node)] {
+		if marked {
 			chipBackground = frame.Palette.Base
 		}
 		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(chipBackground)
-		for offset, ch := range " " + code + " " {
-			screen.SetContent(chip.X+offset, y, ch, nil, style)
-		}
-		if chip.X+chip.W < r.X+r.W-2 {
+		shared.PrintStyled(screen, chip.X, y, " "+code+" ", style)
+		if chip.X+chip.W+1+authenticatorValidityWidth <= r.X+r.W-2 {
 			color := frame.Palette.Muted
 			if remaining <= 5 {
 				color = frame.Palette.Warning
 			}
-			shared.PrintStyled(screen, chip.X+chip.W+1, y, fmt.Sprintf("%ds", remaining), tcell.StyleDefault.Foreground(color).Background(background))
+			shared.PrintStyled(screen, chip.X+chip.W+1, y, fmt.Sprintf("%02ds", remaining), tcell.StyleDefault.Foreground(color).Background(background))
 		}
 	}
 	if selected && s.deleteTarget == nil {

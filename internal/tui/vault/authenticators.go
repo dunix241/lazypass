@@ -3,7 +3,6 @@ package vault
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"lazypass/internal/tui/shared"
@@ -12,6 +11,8 @@ import (
 )
 
 const authenticatorCapacity = 256
+
+const authenticatorValidityWidth = 3
 
 type authenticatorRow struct {
 	value  service.Authenticator
@@ -196,12 +197,11 @@ func (s *View) authenticatorChip(node vault.Node, card shared.Rect, now time.Tim
 	if code == "" || card.W < len(code)+14 {
 		return shared.Rect{}, "", 0
 	}
-	if len(code) == 6 {
-		code = code[:3] + " " + code[3:]
-	} else if len(code) == 8 {
-		code = code[:4] + " " + code[4:]
+	if len(code) == 6 || len(code) == 8 {
+		half := len(code) / 2
+		code = code[:half] + " " + code[half:]
 	}
-	validityWidth := len(strconv.Itoa(remaining)) + 2
+	validityWidth := 1 + authenticatorValidityWidth
 	if card.W < len(code)+24 {
 		validityWidth = 0
 	}
