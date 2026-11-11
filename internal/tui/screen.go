@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"lazypass/internal/config"
@@ -26,22 +27,25 @@ const (
 	themeOverlay
 	storeOverlay
 	vaultPickerOverlay
+	keybindingsOverlay
 )
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
-	vaultPickerViewport  shared.ListViewport
-	vaultActivation      uint64
-	notificationTimer    *time.Timer
-	notificationDeadline time.Time
-	drawnNotification    *notification.Message
-	loggedNotification   *notification.Message
-	notifications        notification.Manager
-	notificationBounds   []shared.Rect
-	unlock               *unlockPrompt
-	running              bool
-	operationContext     context.Context
-	tasks                *task.Scheduler
+	compactSaveGeneration atomic.Uint64
+	keybindings           keybindingsState
+	vaultPickerViewport   shared.ListViewport
+	vaultActivation       uint64
+	notificationTimer     *time.Timer
+	notificationDeadline  time.Time
+	drawnNotification     *notification.Message
+	loggedNotification    *notification.Message
+	notifications         notification.Manager
+	notificationBounds    []shared.Rect
+	unlock                *unlockPrompt
+	running               bool
+	operationContext      context.Context
+	tasks                 *task.Scheduler
 	*tview.Box
 	cfg                 config.Config
 	cfgPath             string
@@ -101,6 +105,8 @@ func (s *screen) Draw(screen tcell.Screen) {
 		s.store.Draw(screen, frame)
 	case vaultPickerOverlay:
 		s.drawVaultPicker(screen, frame)
+	case keybindingsOverlay:
+		s.drawKeybindings(screen, frame)
 	}
 	if s.unlock != nil {
 		s.drawUnlock(screen, frame)

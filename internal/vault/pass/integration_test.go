@@ -320,7 +320,7 @@ os.close(master);os.close(slave)
 			t.Fatalf("TUI fixture: %v %s", err, output)
 		}
 	}
-	drive("a|WAITUI:Login|\r|WAITUI:Destination|hello/world|\r|WAITUI:Password:|public-tui-fixture|\r|WAITFILE:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Stored in vault|q")
+	drive("z|WAITUI:? keybindings|?|WAITUI:Keybindings|/|compact|WAITUI:z compact mode|\x1b|z|\x1b|a|WAITUI:Login|\r|WAITUI:Destination|hello/world|\r|WAITUI:Password:|public-tui-fixture|\r|WAITFILE:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Stored in vault|q")
 	entry, err := p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-fixture" {
 		t.Fatalf("TUI add failed: %v", err)

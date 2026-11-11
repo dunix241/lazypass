@@ -18,6 +18,10 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			s.handleVaultPicker(event)
 			return
 		}
+		if s.overlay == keybindingsOverlay {
+			s.handleKeybindings(event)
+			return
+		}
 		if s.overlay == themeOverlay {
 			s.themePanel.HandleKey(event)
 			return
@@ -37,6 +41,16 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			s.vault.ClearMarks()
 			s.vault.ClearStagedTransfers()
 			return
+		}
+		if event.Key() == tcell.KeyRune {
+			switch event.Rune() {
+			case 'z':
+				s.toggleCompact()
+				return
+			case '?':
+				s.openKeybindings()
+				return
+			}
 		}
 		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
 			s.save()

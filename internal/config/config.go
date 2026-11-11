@@ -19,6 +19,7 @@ import (
 
 // Config is the persisted form of generator.Options.
 type Config struct {
+	Compact          bool    `yaml:"compact"`
 	Updates          Updates `yaml:"updates"`
 	Version          int     `yaml:"version"`
 	Length           int     `yaml:"length"`

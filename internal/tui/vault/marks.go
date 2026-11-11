@@ -21,6 +21,9 @@ func (s *View) CancelMarkedDelete() bool {
 }
 
 func markID(node vault.Node) string {
+	if node.Kind == vault.FolderNode {
+		return "folder:" + node.Path.String()
+	}
 	if node.Shared && len(node.Path) > 2 && (node.Path[0] == "Folders" || node.Path[0] == "Organizations") {
 		return "item:" + node.Path[len(node.Path)-1]
 	}

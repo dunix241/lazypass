@@ -20,7 +20,7 @@ func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(
 		if s.unlock != nil {
 			return true, s
 		}
-		if s.overlay == vaultPickerOverlay {
+		if s.overlay == vaultPickerOverlay || s.overlay == keybindingsOverlay {
 			return true, s
 		}
 		if s.overlay == themeOverlay {

@@ -50,14 +50,34 @@ func TestMarkedDeletionCancellationStopsBetweenEntries(t *testing.T) {
 }
 
 func TestMarkIdentityDoesNotCollideForLocalReservedNames(t *testing.T) {
-	first := vault.Node{Path: vault.Path{"Folders", "one", "entry"}}
-	second := vault.Node{Path: vault.Path{"Folders", "two", "entry"}}
+	first := vault.Node{Path: vault.Path{"Folders", "one", "entry"}, Kind: vault.EntryNode}
+	second := vault.Node{Path: vault.Path{"Folders", "two", "entry"}, Kind: vault.EntryNode}
 	if markID(first) == markID(second) {
 		t.Fatal("local paths collapsed into provider identity")
 	}
 	first.Shared, second.Shared = true, true
 	if markID(first) != markID(second) {
 		t.Fatal("shared references not deduplicated")
+	}
+}
+
+func TestFolderAndEntryWithSamePathHaveIndependentStaging(t *testing.T) {
+	folder := vault.Node{Name: "hello", Path: vault.Path{"hello"}, Kind: vault.FolderNode}
+	entry := vault.Node{Name: "hello", Path: vault.Path{"hello"}, Kind: vault.EntryNode}
+	if markID(folder) == markID(entry) {
+		t.Fatal("folder and entry identity collide")
+	}
+	for _, move := range []bool{false, true} {
+		v := New(Dependencies{})
+		v.transfer = transferState{nodes: []vault.Node{folder}, move: move}
+		v.marks = map[string]bool{markID(folder): true}
+		if !v.stagedEntry(folder) || v.stagedEntry(entry) || v.marks[markID(entry)] {
+			t.Fatal("folder staging or mark leaked onto same-name entry")
+		}
+		v.transfer.nodes = []vault.Node{entry}
+		if v.stagedEntry(folder) || !v.stagedEntry(entry) {
+			t.Fatal("entry staging leaked onto same-name folder")
+		}
 	}
 }
 

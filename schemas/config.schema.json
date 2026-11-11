@@ -5,6 +5,7 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "compact": { "description": "Hide main-view footer shortcuts except the keybindings hint.", "type": "boolean", "default": false },
     "version": {
       "description": "Configuration format version.",
       "type": "integer",
