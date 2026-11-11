@@ -15,6 +15,7 @@ func (s *screen) activateVault(index int) {
 	s.vaultActivation++
 	if s.vault != nil {
 		s.vault.CancelMarkedDelete()
+		s.vault.CancelTransfer()
 		s.vault.ClearMarks()
 		s.vault.ClearAuthenticators()
 		s.vault.CancelCopy()
@@ -151,6 +152,7 @@ func (s *screen) closeVaults() {
 	for _, view := range s.vaultViews {
 		if view != nil {
 			view.CancelMarkedDelete()
+			view.CancelTransfer()
 			view.ClearMarks()
 			view.ClearAuthenticators()
 			view.CancelCopy()

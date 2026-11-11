@@ -27,10 +27,21 @@ func markID(node vault.Node) string {
 	return node.Path.String()
 }
 
+func (s *View) markable(node vault.Node) bool {
+	if s.isVaultParentNode(node) {
+		return false
+	}
+	if node.Kind == vault.EntryNode {
+		return true
+	}
+	_, ok := s.vault.Provider.(vault.FolderTransfer)
+	return ok && node.Kind == vault.FolderNode && !node.Protected
+}
+
 func (s *View) toggleMark(rangeMark bool) {
 	nodes := s.vaultDisplayNodes()
 	node, ok := s.selectedVaultNode()
-	if !ok || node.Kind != vault.EntryNode {
+	if !ok || !s.markable(node) {
 		return
 	}
 	if s.marks == nil {
@@ -48,7 +59,7 @@ func (s *View) toggleMark(rangeMark bool) {
 	nearest, distance := -1, len(nodes)+1
 	for i, candidate := range nodes {
 		candidateID := markID(candidate)
-		if i == s.vaultSelected || candidate.Kind != vault.EntryNode || candidateID == id || !s.marks[candidateID] {
+		if i == s.vaultSelected || !s.markable(candidate) || candidateID == id || !s.marks[candidateID] {
 			continue
 		}
 		d := i - s.vaultSelected
@@ -64,7 +75,7 @@ func (s *View) toggleMark(rangeMark bool) {
 		return
 	}
 	for i := min(nearest, s.vaultSelected); i <= max(nearest, s.vaultSelected); i++ {
-		if nodes[i].Kind == vault.EntryNode {
+		if s.markable(nodes[i]) {
 			s.marks[markID(nodes[i])] = true
 		}
 	}
@@ -75,6 +86,10 @@ func (s *View) openMarkedDelete() {
 	seen := make(map[string]bool)
 	for _, node := range s.vaultDisplayNodes() {
 		id := markID(node)
+		if node.Kind == vault.FolderNode && s.marks[id] {
+			s.notify(shared.Warning, "Unmark folders before deleting marked entries; use d or D on a single folder")
+			return
+		}
 		if node.Kind == vault.EntryNode && s.marks[id] && !seen[id] {
 			node.Path = append(vault.Path(nil), node.Path...)
 			nodes = append(nodes, node)

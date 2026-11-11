@@ -292,7 +292,7 @@ func (s *View) copyVaultEntry() {
 
 func (s *View) copyEntry(authenticator bool) {
 	node, ok := s.selectedVaultNode()
-	if !ok || node.Kind != vault.EntryNode {
+	if !ok || (authenticator && node.Kind != vault.EntryNode) || s.isVaultParentNode(node) {
 		return
 	}
 	if s.copying {
@@ -313,6 +313,9 @@ func (s *View) copyEntry(authenticator bool) {
 		}
 		if authenticator {
 			return provider.CopyAuthenticator(ctx, node.Path)
+		}
+		if node.Kind == vault.FolderNode {
+			return provider.CopyName(ctx, node.Name, copyContext)
 		}
 		return provider.CopyPassword(ctx, node.Path, copyContext)
 	}, func(err error) {

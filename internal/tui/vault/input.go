@@ -6,6 +6,10 @@ import (
 )
 
 func (s *View) HandleKey(event *tcell.EventKey) {
+	if s.IsTransferActive() {
+		s.handleTransferKey(event)
+		return
+	}
 	if s.loading {
 		return
 	}
@@ -20,6 +24,7 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.marks = nil
+		s.ClearStagedTransfers()
 	case tcell.KeyUp:
 		s.moveVaultSelection(-1)
 	case tcell.KeyDown:
@@ -30,6 +35,14 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		s.openVaultNode()
 	case tcell.KeyRune:
 		switch event.Rune() {
+		case 'c':
+			s.copyEntry(false)
+		case 'y':
+			s.stageTransfer(false)
+		case 'x':
+			s.stageTransfer(true)
+		case 'p':
+			s.pasteEntries()
 		case 'm':
 			s.toggleMark(false)
 		case 'M':
@@ -37,6 +50,8 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		case 'C':
 			s.copyEntry(true)
 		case 'r':
+			s.openRename()
+		case 'R':
 			s.refreshProvider()
 		case 'e':
 			node, ok := s.selectedVaultNode()

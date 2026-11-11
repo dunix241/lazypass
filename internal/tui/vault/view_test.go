@@ -52,13 +52,18 @@ func TestVaultBrowseCopyAndParentSelection(t *testing.T) {
 	v := New(Dependencies{Service: service.Service{Provider: p, Copy: func(password string) error { copied = password; return nil }}, Notify: func(_ shared.Level, m string) { message = m }})
 	v.Refresh()
 	key(v, tcell.KeyRune, 'j')
+	key(v, tcell.KeyRune, 'c')
+	if copied != "team" || len(v.vaultPath) != 0 {
+		t.Fatal("c did not copy folder name without navigating")
+	}
+	copied = ""
 	key(v, tcell.KeyRune, 'l')
 	if v.vaultPath.String() != "team" {
 		t.Fatal("l did not open folder")
 	}
 	key(v, tcell.KeyRune, 'c')
-	if copied != "" {
-		t.Fatal("c should not copy in Vault")
+	if copied != "secret" {
+		t.Fatal("c did not copy entry value")
 	}
 	key(v, tcell.KeyRune, 'l')
 	if copied != "secret" || message != "Copied to clipboard" {

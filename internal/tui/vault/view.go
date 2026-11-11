@@ -27,6 +27,8 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
+	renameTarget       *vault.Node
+	transfer           transferState
 	markedDeleteCancel context.CancelFunc
 	marks              map[string]bool
 	viewport           shared.ListViewport
@@ -73,6 +75,10 @@ func (s *View) CancelCopy() {
 }
 
 func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }
+
+func (s *View) IsTransferActive() bool {
+	return s.transfer.busy || s.transfer.conflict || s.renameTarget != nil
+}
 
 func New(deps Dependencies) *View { return &View{vault: deps.Service, deps: deps} }
 func (s *View) IsFiltering() bool { return s.vaultFiltering }

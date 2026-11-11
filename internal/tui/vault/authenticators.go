@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"lazypass/internal/tui/shared"
@@ -200,7 +201,7 @@ func (s *View) authenticatorChip(node vault.Node, card shared.Rect, now time.Tim
 	} else if len(code) == 8 {
 		code = code[:4] + " " + code[4:]
 	}
-	validityWidth := 7
+	validityWidth := len(strconv.Itoa(remaining)) + 2
 	if card.W < len(code)+24 {
 		validityWidth = 0
 	}

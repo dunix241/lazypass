@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/uniseg"
 )
 
 func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	s.authenticators.card = frame.Card
 	defer s.drawDelete(screen, frame)
+	defer s.drawTransfer(screen, frame)
 	r, colors := frame.Card, frame.Palette
 	path := s.LocationLabel(s.vaultPath)
 	title := "Vault"
@@ -84,7 +86,19 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 		}
 	}
 	style := tcell.StyleDefault.Foreground(nodeColor(node, frame.Palette)).Background(background)
-	shared.PrintStyled(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), labelWidth), style)
+	if s.stagedCut(node) {
+		style = style.Foreground(frame.Palette.Muted)
+	}
+	label := "  " + nodeLabel(node, frame.NerdFont)
+	if s.stagedEntry(node) {
+		suffix := " (copy)"
+		if s.transfer.move {
+			suffix = " (cut)"
+		}
+		label = shared.Truncate(label, max(0, labelWidth-len(suffix)))
+		shared.PrintStyled(screen, r.X+2+uniseg.StringWidth(label), y, shared.Truncate(suffix, labelWidth-uniseg.StringWidth(label)), style.Foreground(frame.Palette.Muted))
+	}
+	shared.PrintStyled(screen, r.X+2, y, shared.Truncate(label, labelWidth), style)
 	if code == "Loading…" {
 		shared.PrintStyled(screen, chip.X, y, code, tcell.StyleDefault.Foreground(frame.Palette.Muted).Background(background))
 	} else if code != "" {
@@ -101,7 +115,7 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 			if remaining <= 5 {
 				color = frame.Palette.Warning
 			}
-			shared.PrintStyled(screen, chip.X+chip.W+1, y, fmt.Sprintf("%5ds", remaining), tcell.StyleDefault.Foreground(color).Background(background))
+			shared.PrintStyled(screen, chip.X+chip.W+1, y, fmt.Sprintf("%ds", remaining), tcell.StyleDefault.Foreground(color).Background(background))
 		}
 	}
 	if selected && s.deleteTarget == nil {

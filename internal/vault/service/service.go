@@ -195,6 +195,13 @@ func (s Service) RemoveFolder(ctx context.Context, path vault.Path) error {
 	return remover.RemoveFolder(ctx, path)
 }
 
+func (s Service) CopyName(ctx context.Context, name string, guards ...context.Context) error {
+	if s.Copy == nil {
+		return ErrClipboard
+	}
+	return s.copyValue(ctx, name, guards...)
+}
+
 func (s Service) CopyPassword(ctx context.Context, path vault.Path, guards ...context.Context) error {
 	if s.Copy == nil {
 		return ErrClipboard

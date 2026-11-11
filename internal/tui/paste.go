@@ -15,5 +15,8 @@ func (s *screen) PasteHandler() func(string, func(tview.Primitive)) {
 		if s.route == VaultRoute && s.overlay == noOverlay && s.vault.IsConfirmingDelete() {
 			s.vault.PasteConfirmation(text)
 		}
+		if s.route == VaultRoute && s.overlay == noOverlay && s.vault.IsTransferActive() {
+			s.vault.PasteTransferName(text)
+		}
 	}
 }

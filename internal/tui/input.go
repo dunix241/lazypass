@@ -26,15 +26,16 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			s.store.HandleKey(event)
 			return
 		}
-		if s.route == VaultRoute && (s.vault.IsFiltering() || s.vault.IsConfirmingDelete()) {
+		if s.route == VaultRoute && (s.vault.IsFiltering() || s.vault.IsConfirmingDelete() || s.vault.IsTransferActive()) {
 			s.vault.HandleKey(event)
 			return
 		}
-		if s.route == VaultRoute && event.Key() == tcell.KeyEscape && s.vault.HasMarks() {
+		if s.route == VaultRoute && event.Key() == tcell.KeyEscape && (s.vault.HasMarks() || s.vault.HasStagedTransfers()) {
 			if s.vault.CancelMarkedDelete() {
 				return
 			}
 			s.vault.ClearMarks()
+			s.vault.ClearStagedTransfers()
 			return
 		}
 		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {

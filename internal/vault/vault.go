@@ -235,6 +235,22 @@ type EntryCreator interface {
 	Create(context.Context, Entry) error
 }
 
+// EntryTransfer preserves native data within one provider. Destination is a
+// container plus an explicit name, since remote browser paths contain item IDs.
+type EntryTransfer interface {
+	CheckTransfer(context.Context, Path, Path, string, bool) error
+	Transfer(context.Context, Path, Path, string, bool) error
+}
+
+type FolderTransfer interface {
+	CheckFolderTransfer(context.Context, Path, Path, string, bool) error
+	TransferFolder(context.Context, Path, Path, string, bool) error
+}
+
+type Renamer interface {
+	Rename(context.Context, Node, string) error
+}
+
 // Locker drops any session-held decryption identities.
 type Locker interface{ Lock() }
 

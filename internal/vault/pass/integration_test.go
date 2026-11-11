@@ -112,6 +112,46 @@ func TestEphemeralVaultIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	t.Run("native copy and move", func(t *testing.T) {
+		original, err := os.ReadFile(filepath.Join(root, "hello", "world.gpg"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Transfer(ctx, path, vault.Path{"hello"}, "copied", false); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Transfer(ctx, vault.Path{"hello", "copied"}, vault.Path{"hello"}, "moved", true); err != nil {
+			t.Fatal(err)
+		}
+		copied, err := os.ReadFile(filepath.Join(root, "hello", "moved.gpg"))
+		if err != nil || string(original) != string(copied) {
+			t.Fatal("native transfer changed ciphertext")
+		}
+		if got, err := p.Read(ctx, vault.Path{"hello", "moved"}); err != nil || got.Password != entry.Password {
+			t.Fatal("transferred entry did not decrypt")
+		}
+		if output := strings.TrimSpace(string(command("git", "-C", root, "status", "--porcelain"))); output != "" {
+			t.Fatalf("transfer left uncommitted changes: %s", output)
+		}
+		if err := p.Delete(ctx, vault.Path{"hello", "moved"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.TransferFolder(ctx, vault.Path{"hello"}, nil, "folder-copy", false); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.TransferFolder(ctx, vault.Path{"folder-copy"}, nil, "folder-moved", true); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := p.Read(ctx, vault.Path{"folder-moved", "world"}); err != nil || got.Password != entry.Password {
+			t.Fatal("recursive copy did not decrypt")
+		}
+		if output := strings.TrimSpace(string(command("git", "-C", root, "status", "--porcelain"))); output != "" {
+			t.Fatalf("recursive transfer left changes: %s", output)
+		}
+		if err := p.DeleteFolder(ctx, vault.Path{"folder-moved"}); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("authenticator encrypted round trip", func(t *testing.T) {
 		const uri = "otpauth://totp/Fixture?secret=JBSWY3DPEHPK3PXP"
 		entry.Authenticator = uri
@@ -294,7 +334,19 @@ os.close(master);os.close(slave)
 	if err := p.Write(context.Background(), entry); err != nil {
 		t.Fatal(err)
 	}
-	drive("l|WAITUI:world|o|WAITUI:Copied to clipboard|CHECKOTP|e|WAITUI:Authenticator|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:40x20|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:84x24|\x1b|q")
+	drive("l|WAITUI:world|C|WAITUI:Copied to clipboard|CHECKOTP|e|WAITUI:Authenticator|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:40x20|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:84x24|\x1b|q")
+	drive("l|WAITUI:world|y|p|WAITUI:Paste conflict|r|\x15|world-copy|\r|WAITFILE:" + filepath.Join(root, "hello", "world-copy.gpg") + "|WAITUI:Pasted 1 item|q")
+	drive("l|WAITUI:world|r|WAITUI:Name|\x15|world-renamed|\r|WAITFILE:" + filepath.Join(root, "hello", "world-renamed.gpg") + "|WAITUI:Renamed in vault|q")
+	if err := p.Rename(context.Background(), vault.Node{Path: vault.Path{"hello", "world-renamed"}, Kind: vault.EntryNode}, "world"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Delete(context.Background(), vault.Path{"hello", "world-copy"}); err != nil {
+		t.Fatal(err)
+	}
+	drive("l|WAITUI:world|x|h|p|WAITFILE:" + filepath.Join(root, "world.gpg") + "|WAITABSENT:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Pasted 1 item|q")
+	if err := p.Transfer(context.Background(), vault.Path{"world"}, vault.Path{"hello"}, "world", true); err != nil {
+		t.Fatal(err)
+	}
 	data, err := hex.DecodeString("0a2a0a1431323334353637383930313233343536373839301205616c6963651a074578616d706c65200128013002100218012000282a")
 	if err != nil {
 		t.Fatal(err)
@@ -341,6 +393,20 @@ os.close(master);os.close(slave)
 	drive("l|WAITUI:marked-a|m|WAITUI:1 marked|\x1b|ABSENT:1 marked|m|j|M|WAITUI:2 marked|d|WAITUI:Delete 2 marked entries|DELETE 2|\r|WAITUI:Deleted marked entries|q")
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatal("marked PTY deletion left entries")
+	}
+	if err := p.Create(context.Background(), vault.Entry{Path: vault.Path{"hello", "folder-fixture"}, Password: "public-folder-fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	drive("m|WAITUI:1 marked|y|WAITUI:(copy)|\x1b|ABSENT:(copy)|ABSENT:1 marked|y|p|WAITUI:Paste conflict|r|\x15|folder-ui-copy|\r|WAITUI:Pasted 1 item|q")
+	if _, err := os.Stat(filepath.Join(root, "folder-ui-copy")); err != nil {
+		t.Fatal("PTY recursive folder copy missing")
+	}
+	if err := p.DeleteFolder(context.Background(), vault.Path{"folder-ui-copy"}); err != nil {
+		t.Fatal(err)
+	}
+	drive("x|WAITUI:(cut)|p|WAITUI:Paste conflict|r|\x15|folder-ui-moved|\r|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Pasted 1 item|q")
+	if err := p.TransferFolder(context.Background(), vault.Path{"folder-ui-moved"}, nil, "hello", true); err != nil {
+		t.Fatal(err)
 	}
 	drive("D|WAITUI:Delete folder|hello|\r|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), nil); err != nil || len(nodes) != 0 {
