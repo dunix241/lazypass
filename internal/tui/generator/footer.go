@@ -1,27 +1,45 @@
 package generator
 
-import "lazypass/internal/tui/shared"
+import (
+	"strings"
+
+	"lazypass/internal/tui/shared"
+
+	"github.com/gdamore/tcell/v2"
+)
+
+func (s *View) FooterActions() shared.Footer {
+	actions := []shared.Action{}
+	if s.selected == focusLength {
+		actions = append(actions, shared.Action{
+			Hint: "←/→", Label: "length", Priority: shared.Essential,
+			OnClick: func() { s.selected = focusLength },
+		})
+	} else if s.selected >= focusUpper && s.selected <= focusAmbiguous {
+		actions = append(actions, shared.Action{Hint: "<space>", Label: "toggle", Priority: shared.Essential, Key: tcell.NewEventKey(tcell.KeyRune, ' ', 0)})
+	}
+	actions = append(actions,
+		shared.Action{Hint: "<tab>", Label: "focus", Priority: shared.Secondary, Key: tcell.NewEventKey(tcell.KeyTAB, 0, 0)},
+		shared.Action{Hint: "a", Label: "add", Priority: shared.Primary},
+		shared.Action{Hint: "r", Label: "regenerate", Priority: shared.Primary},
+		shared.Action{Hint: "c", Label: "copy", Priority: shared.Primary},
+		shared.Action{Hint: "V", Label: "vault", Priority: shared.Secondary},
+		shared.Action{Hint: "t", Label: "themes", Priority: shared.Optional},
+		shared.Action{Hint: "v", Label: "view", Priority: shared.Essential},
+		shared.Action{Hint: "q", Label: "quit", Priority: shared.Essential},
+	)
+	for i := range actions {
+		if actions[i].Key == nil && actions[i].OnClick == nil && len(actions[i].Hint) == 1 {
+			actions[i].Key = tcell.NewEventKey(tcell.KeyRune, rune(actions[i].Hint[0]), 0)
+		}
+	}
+	return shared.Footer{Actions: actions}
+}
+
+func (s *View) FooterRows(width, maxRows int) []string {
+	return s.FooterActions().Rows(width-2, shared.FooterOptions{MaxRows: maxRows})
+}
 
 func (s *View) Footer(width int) string {
-	contextHint := ""
-	switch s.selected {
-	case focusLength:
-		contextHint = "←/→ length"
-	case focusUpper, focusLower, focusNumbers, focusSymbols, focusAmbiguous:
-		contextHint = "<space> toggle"
-	}
-	bases := []string{
-		"<tab> focus  •  a add  •  r regenerate  •  c copy  •  V vault  •  t themes  •  v view  •  q quit",
-		"a add  •  c copy  •  V vault  •  t themes  •  v view  •  q quit",
-		"a add  •  v view  •  q quit", "q quit",
-	}
-	if contextHint == "" {
-		return shared.FitFooter(width, bases...)
-	}
-	candidates := make([]string, 0, len(bases)+1)
-	for _, base := range bases {
-		candidates = append(candidates, contextHint+"  •  "+base)
-	}
-	candidates = append(candidates, contextHint)
-	return shared.FitFooter(width, candidates...)
+	return strings.Join(s.FooterRows(width, 1), "")
 }

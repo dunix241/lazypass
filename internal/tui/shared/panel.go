@@ -8,6 +8,8 @@ import (
 )
 
 type Action struct {
+	OnClick  func()
+	Key      *tcell.EventKey
 	Priority int
 	Label    string
 	Hint     string

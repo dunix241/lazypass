@@ -31,8 +31,24 @@ func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(
 		if s.overlay == storeOverlay {
 			result = s.store.HandleMouse(action, event, frame)
 		} else {
-			_, _, w, h := s.GetRect()
-			if calculateLayout(w, h).tooSmall {
+			x0, y0, w0, h0 := s.GetRect()
+			if calculateLayout(w0, h0).tooSmall {
+				return true, s
+			}
+			footer := s.footerActions()
+			rows := s.footerRows(w0)
+			if (s.route != VaultRoute || !s.vault.IsConfirmingDelete()) && y >= y0+h0-len(rows) {
+				if action == tview.MouseLeftClick {
+					if item, ok := footer.HitAction(shared.Rect{X: x0 + 1, Y: y0 + h0 - len(rows), W: max(0, w0-2), H: len(rows)}, shared.FooterOptions{MaxRows: footerMaxRows}, x, y); ok {
+						if item.OnClick != nil {
+							item.OnClick()
+						} else if item.Key != nil {
+							s.InputHandler()(item.Key, nil)
+						} else if item.Invoke != nil {
+							item.Invoke()
+						}
+					}
+				}
 				return true, s
 			}
 			if s.route == VaultRoute {

@@ -82,17 +82,11 @@ func (s *screen) Draw(screen tcell.Screen) {
 	logo := calculateLogoLayout(width, height)
 	drawLogo(screen, logo, x, y, s.colors)
 	s.drawHeaderStatus(screen, logo, x, y, width)
-	footer := ""
-	var footerRows []string
+	footerRows := s.footerRows(width)
 	if s.route == VaultRoute {
 		s.vault.Draw(screen, frame)
-		footerRows = s.vault.FooterRows(width, 2)
 	} else {
 		s.generator.Draw(screen, frame)
-		footer = s.generator.Footer(width)
-	}
-	if footerRows == nil {
-		footerRows = []string{footer}
 	}
 	for i, row := range footerRows {
 		shared.PrintActionText(screen, shared.Rect{X: x + 1, Y: y + height - len(footerRows) + i, W: max(0, width-2), H: 1}, row, s.colors.Muted)
@@ -137,8 +131,9 @@ func (s *screen) contentLayout(w, h int) layout {
 		l.card.Y = rows
 		l.card.H = max(1, min(l.card.H, h-l.card.Y-1))
 	}
-	if s.route == VaultRoute && s.vault != nil {
-		l.card.H = min(l.card.H, max(1, h-l.card.Y-len(s.vault.FooterRows(w, 2))))
+	if s.vault != nil && s.generator != nil {
+		rows := s.footerRows(w)
+		l.card.H = min(l.card.H, max(1, h-l.card.Y-len(rows)))
 	}
 	return l
 }

@@ -16,12 +16,35 @@ const (
 type FooterOptions struct{ MaxRows int }
 
 type footerLabel struct {
+	action   Action
 	text     string
 	width    int
 	priority int
 }
 
+type footerRow struct {
+	text   string
+	width  int
+	labels []footerLabel
+}
+
 func (f Footer) Rows(width int, options FooterOptions) []string {
+	if len(f.Actions) == 0 {
+		if width <= 0 || options.MaxRows <= 0 {
+			return nil
+		}
+		rows := WrapText(f.Text, width)
+		return rows[:min(len(rows), options.MaxRows)]
+	}
+	layout := f.layoutRows(width, options)
+	rows := make([]string, len(layout))
+	for i, row := range layout {
+		rows[i] = row.text
+	}
+	return rows
+}
+
+func (f Footer) layoutRows(width int, options FooterOptions) []footerRow {
 	if width <= 0 || options.MaxRows <= 0 {
 		return nil
 	}
@@ -33,12 +56,8 @@ func (f Footer) Rows(width int, options FooterOptions) []string {
 		label := strings.TrimSpace(action.Hint + " " + action.Label)
 		labelWidth := uniseg.StringWidth(label)
 		if label != "" && labelWidth <= width {
-			actions = append(actions, footerLabel{text: label, width: labelWidth, priority: action.Priority})
+			actions = append(actions, footerLabel{action: action, text: label, width: labelWidth, priority: action.Priority})
 		}
-	}
-	if len(f.Actions) == 0 {
-		rows := WrapText(f.Text, width)
-		return rows[:min(len(rows), options.MaxRows)]
 	}
 	for len(actions) > 0 {
 		rows := packFooter(actions, width)
@@ -56,17 +75,40 @@ func (f Footer) Rows(width int, options FooterOptions) []string {
 	return nil
 }
 
-func packFooter(actions []footerLabel, width int) []string {
-	var rows []string
+// HitAction uses the same packed rows and centered placement as drawing.
+func (f Footer) HitAction(bounds Rect, options FooterOptions, x, y int) (Action, bool) {
+	if !bounds.Contains(x, y) {
+		return Action{}, false
+	}
+	rows := f.layoutRows(bounds.W, options)
+	row := y - bounds.Y
+	if row < 0 || row >= len(rows) {
+		return Action{}, false
+	}
+	left := bounds.X + max(0, (bounds.W-rows[row].width)/2)
+	offset := 0
+	for _, label := range rows[row].labels {
+		if x >= left+offset && x < left+offset+label.width {
+			return label.action, true
+		}
+		offset += label.width + 5
+	}
+	return Action{}, false
+}
+
+func packFooter(actions []footerLabel, width int) []footerRow {
+	var rows []footerRow
+	start := 0
 	var line strings.Builder
 	used := 0
-	for _, action := range actions {
+	for i, action := range actions {
 		separator := 0
 		if used > 0 {
 			separator = 5
 		}
 		if used+separator+action.width > width {
-			rows = append(rows, line.String())
+			rows = append(rows, footerRow{text: line.String(), width: used, labels: actions[start:i]})
+			start = i
 			line.Reset()
 			used, separator = 0, 0
 		}
@@ -77,7 +119,7 @@ func packFooter(actions []footerLabel, width int) []string {
 		used += separator + action.width
 	}
 	if used > 0 {
-		rows = append(rows, line.String())
+		rows = append(rows, footerRow{text: line.String(), width: used, labels: actions[start:]})
 	}
 	return rows
 }

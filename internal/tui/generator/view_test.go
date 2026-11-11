@@ -174,7 +174,7 @@ func TestGeneratorFooterShowsOnlyFocusedControlHint(t *testing.T) {
 			if utf8.RuneCountInString(footer) > width-2 || !strings.Contains(footer, test.want) || strings.Contains(footer, test.omit) {
 				t.Fatalf("footer: %q", footer)
 			}
-			if width >= 84 && (strings.Index(footer, "c copy") >= strings.Index(footer, "t themes") || strings.Index(footer, "t themes") >= strings.Index(footer, "v view")) {
+			if strings.Contains(footer, "t themes") && (strings.Index(footer, "c copy") >= strings.Index(footer, "t themes") || strings.Index(footer, "t themes") >= strings.Index(footer, "v view")) {
 				t.Fatal("footer ordering changed")
 			}
 		}

@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"github.com/gdamore/tcell/v2"
 	"lazypass/internal/tui/shared"
 	"strings"
 )
@@ -16,6 +17,10 @@ func (s *View) FooterRows(width, maxRows int) []string {
 		}
 		return []string{shared.FitFooter(width, "y yes  •  n no", "y/n")}
 	}
+	return s.FooterActions().Rows(width-2, shared.FooterOptions{MaxRows: maxRows})
+}
+
+func (s *View) FooterActions() shared.Footer {
 	mark, remove := "mark", "remove"
 	if len(s.marks) > 0 {
 		mark, remove = "unmark", "delete marked"
@@ -37,5 +42,8 @@ func (s *View) FooterRows(width, maxRows int) []string {
 		{Hint: "v", Label: "view", Priority: shared.Essential},
 		{Hint: "q", Label: "quit", Priority: shared.Essential},
 	}
-	return (shared.Footer{Actions: actions}).Rows(width-2, shared.FooterOptions{MaxRows: maxRows})
+	for i := range actions {
+		actions[i].Key = tcell.NewEventKey(tcell.KeyRune, rune(actions[i].Hint[0]), 0)
+	}
+	return shared.Footer{Actions: actions}
 }
