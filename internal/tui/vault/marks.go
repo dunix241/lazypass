@@ -3,7 +3,6 @@ package vault
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
@@ -89,14 +88,10 @@ func (s *View) openMarkedDelete() {
 		s.notify(shared.Warning, "Deletion unavailable")
 		return
 	}
-	names := make([]string, len(nodes))
-	for i, node := range nodes {
-		names[i] = node.Name
-	}
 	s.deleteTarget = &nodes[0]
 	s.deleteDialog = shared.NewConfirmation(shared.ConfirmationOptions{
 		Title:       fmt.Sprintf("Delete %d marked entries", len(nodes)),
-		Message:     "Deletes these entries. Shared items are deleted from every collection.\n" + strings.Join(names, "\n"),
+		Message:     "Deletes the marked entries. Shared items are deleted from every collection.",
 		RequireText: fmt.Sprintf("DELETE %d", len(nodes)),
 		Destructive: true,
 		OnCancel:    s.cancelDelete,

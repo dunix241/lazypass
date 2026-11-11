@@ -16,13 +16,13 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	r, colors := frame.Card, frame.Palette
 	path := s.LocationLabel(s.vaultPath)
 	title := "Vault"
-	if s.deps.Name != "" {
-		title += " · " + s.deps.Name
+	if s.vault.Provider != nil {
+		title += " · " + s.vault.Provider.Name() + "://" + s.deps.Name + path
 	}
 	if len(s.marks) > 0 {
 		title += fmt.Sprintf(" · %d marked", len(s.marks))
 	}
-	shared.Panel{Bounds: r, Title: title + ": " + path, TitleColor: colors.Accent, Border: colors.Border, Background: colors.Surface}.Draw(screen, nil)
+	shared.Panel{Bounds: r, Title: title, TitleColor: colors.Accent, Border: colors.Border, Background: colors.Surface}.Draw(screen, nil)
 	if s.vault.Provider == nil {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)
 		return
