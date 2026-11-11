@@ -74,7 +74,7 @@ func TestVaultFooterUsesVaultHintsAtEveryWidth(t *testing.T) {
 		}
 		sim.Fini()
 		text := footer.String()
-		if !strings.Contains(text, "h back") || !strings.Contains(text, "l open/copy") || !strings.Contains(text, "q quit") || strings.Contains(text, "a Add") {
+		if !strings.Contains(text, "d remove") || !strings.Contains(text, "D recursive delete") || strings.Contains(text, "a Add") {
 			t.Fatalf("%d-column Vault footer = %q", width, text)
 		}
 	}
