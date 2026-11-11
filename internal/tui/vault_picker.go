@@ -9,6 +9,7 @@ import (
 	"lazypass/internal/vault/browsercache"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 func (s *screen) activateVault(index int) {
@@ -144,6 +145,31 @@ func (s *screen) drawVaultPicker(screen tcell.Screen, frame shared.Frame) {
 func (s *screen) moveVaultPicker(delta int) {
 	if len(s.vaults) > 0 {
 		s.vaultPickerSelected = (s.vaultPickerSelected + delta + len(s.vaults)) % len(s.vaults)
+	}
+}
+
+func (s *screen) handleVaultPickerMouse(action tview.MouseAction, event *tcell.EventMouse) {
+	v := s.frame().Viewport
+	r := shared.CenteredPanel(v, min(60, v.W-2), min(len(s.vaults)+4, v.H-2))
+	x, y := event.Position()
+	if !r.Contains(x, y) {
+		return
+	}
+	switch action {
+	case tview.MouseScrollUp:
+		s.moveVaultPicker(-1)
+	case tview.MouseScrollDown:
+		s.moveVaultPicker(1)
+	case tview.MouseLeftClick, tview.MouseLeftDoubleClick:
+		start, end := s.vaultPickerViewport.Window(len(s.vaults), r.H-4, s.vaultPickerSelected)
+		index := start + y - r.Y - 2
+		if x < r.X+2 || x >= r.X+r.W-2 || y < r.Y+2 || index < start || index >= end {
+			return
+		}
+		s.vaultPickerSelected = index
+		if action == tview.MouseLeftDoubleClick {
+			s.handleVaultPicker(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+		}
 	}
 }
 

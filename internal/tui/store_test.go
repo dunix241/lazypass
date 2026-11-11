@@ -47,6 +47,7 @@ func TestVaultAddUsesManualValueAndRefreshes(t *testing.T) {
 	if a.screen.overlay != storeOverlay {
 		t.Fatal("Vault a did not open Add")
 	}
+	key(tcell.KeyEnter, 0)
 	for _, r := range "folder/value" {
 		key(tcell.KeyRune, r)
 	}

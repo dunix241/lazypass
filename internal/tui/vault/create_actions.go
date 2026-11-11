@@ -1,6 +1,9 @@
 package vault
 
-import "lazypass/internal/vault"
+import (
+	"lazypass/internal/vault"
+	"strings"
+)
 
 type createAction struct {
 	label     string
@@ -10,6 +13,21 @@ type createAction struct {
 }
 
 func (s *StoreForm) createActions() []createAction {
+	actions := s.allCreateActions()
+	if s.actionFilter == "" {
+		return actions
+	}
+	query := strings.ToLower(s.actionFilter)
+	filtered := actions[:0]
+	for _, action := range actions {
+		if strings.Contains(strings.ToLower(action.label), query) {
+			filtered = append(filtered, action)
+		}
+	}
+	return filtered
+}
+
+func (s *StoreForm) allCreateActions() []createAction {
 	var actions []createAction
 	for _, kind := range s.deps.Service.SupportedEntryTypes() {
 		actions = append(actions, createAction{label: kind.String(), kind: kind})
@@ -32,7 +50,7 @@ func (s *StoreForm) chooseCreateAction() {
 	if len(actions) == 0 {
 		return
 	}
-	action := actions[min(s.actionIndex, len(actions)-1)]
+	action := actions[max(0, min(s.actionIndex, len(actions)-1))]
 	if action.bulk {
 		s.choosingType = false
 		s.bulk = &bulkImport{phase: "images"}

@@ -50,7 +50,13 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 	}
 	if s.choosingType {
 		actions := s.createActions()
+		if s.actionFiltering {
+			shared.PrintAt(screen, r.X+2, r.Y+1, shared.Truncate("Filter: "+s.actionFilter+"_", r.W-4), colors.Focus)
+		}
 		start, end := s.actionViewport.Window(len(actions), max(0, r.H-4), s.actionIndex)
+		if len(actions) == 0 {
+			shared.PrintAt(screen, r.X+2, r.Y+2, "No matching entry types", colors.Muted)
+		}
 		for i := start; i < end; i++ {
 			action := actions[i]
 			color := colors.Text
@@ -61,7 +67,7 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 			}
 			shared.PrintAt(screen, r.X+2, r.Y+2+i-start, prefix+action.label, color)
 		}
-		shared.PrintPanelFooter(screen, r, "↑/↓ select", colors.Muted)
+		shared.PrintPanelFooter(screen, r, "/ filter  •  ↑/↓ select", colors.Muted)
 		return
 	}
 	if s.loadingEntries {
@@ -154,7 +160,7 @@ func (s *StoreForm) storeFormRect(viewport shared.Rect) (shared.Rect, int) {
 	w := min(52, viewport.W-4)
 	maxHeight := viewport.H - 4
 	if s.choosingType {
-		h := min(4+len(s.createActions()), maxHeight)
+		h := min(4+len(s.allCreateActions()), maxHeight)
 		return shared.Rect{X: viewport.X + (viewport.W-w)/2, Y: viewport.Y + (viewport.H-h)/2, W: w, H: h}, 0
 	}
 	if s.editingValue {

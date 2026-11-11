@@ -373,7 +373,7 @@ os.close(master);os.close(slave)
 	if err != nil {
 		t.Fatal(err)
 	}
-	drive("a|WAITUI:Import authenticators|j|j|j|j|j|j|\r|WAITUI:Collect export|" + imagePath + "|\r|WAITUI:Review accounts|r|WAITUI:Entry name|\x15|discarded|\x1b|WAITUI:Review accounts|ABSENT:discarded|\r|WAITUI:Use this location|\x1b|WAITUI:Review accounts|\r|WAITUI:Use this location|\r|WAITUI:Imported|\r|WAITUI:Authenticators imported|q")
+	drive("a|WAITUI:Import authenticators|/|Import|\r|WAITUI:Collect export|" + imagePath + "|\r|WAITUI:Review accounts|r|WAITUI:Entry name|\x15|discarded|\x1b|WAITUI:Review accounts|ABSENT:discarded|\r|WAITUI:Use this location|\x1b|WAITUI:Review accounts|\r|WAITUI:Use this location|\r|WAITUI:Imported|\r|WAITUI:Authenticators imported|q")
 	imported, err := p.Read(context.Background(), vault.Path{"Example - alice"})
 	if err != nil || imported.Password != "" || imported.Authenticator == "" {
 		t.Fatal("PTY bulk import did not create encrypted authenticator")

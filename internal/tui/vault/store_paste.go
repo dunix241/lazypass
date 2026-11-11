@@ -1,7 +1,15 @@
 package vault
 
+import "github.com/gdamore/tcell/v2"
+
 func (s *StoreForm) Paste(text string) {
-	if !s.open || s.saving || s.loadingEntries || s.choosingType {
+	if !s.open || s.saving || s.loadingEntries {
+		return
+	}
+	if s.choosingType {
+		for _, r := range text {
+			s.HandleKey(tcell.NewEventKey(tcell.KeyRune, r, 0))
+		}
 		return
 	}
 	if s.bulk != nil {

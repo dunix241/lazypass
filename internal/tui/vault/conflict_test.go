@@ -14,6 +14,7 @@ func TestAddRejectsOnlyExistingEntry(t *testing.T) {
 		p := &memoryVault{nodes: map[string][]vault.Node{"": {{Name: "hello", Path: vault.Path{"hello"}, Kind: kind}}}}
 		s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: p}, Password: func() string { return "generated" }})
 		s.OpenAdd(nil)
+		storeKey(s, tcell.KeyEnter, 0)
 		for _, r := range "hello" {
 			storeKey(s, tcell.KeyRune, r)
 		}
@@ -40,6 +41,7 @@ func TestAddRechecksDestinationAtSave(t *testing.T) {
 	p := &memoryVault{nodes: map[string][]vault.Node{}}
 	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: p}})
 	s.OpenAdd(nil)
+	storeKey(s, tcell.KeyEnter, 0)
 	for _, r := range "hello" {
 		storeKey(s, tcell.KeyRune, r)
 	}
@@ -58,6 +60,7 @@ func TestAddAllowsExistingParentName(t *testing.T) {
 	p := &memoryVault{nodes: map[string][]vault.Node{"": {{Name: "hello", Path: vault.Path{"hello"}, Kind: vault.EntryNode}}}}
 	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: p}})
 	s.OpenAdd(nil)
+	storeKey(s, tcell.KeyEnter, 0)
 	for _, r := range "hello/world" {
 		storeKey(s, tcell.KeyRune, r)
 	}

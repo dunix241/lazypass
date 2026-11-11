@@ -34,6 +34,8 @@ type StoreForm struct {
 	qrCancel             context.CancelFunc
 	createParent         vault.Path
 	actionIndex          int
+	actionFilter         string
+	actionFiltering      bool
 	creatingContainer    bool
 	location             vault.Path
 	locationOnly         bool

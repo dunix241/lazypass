@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 	"github.com/rivo/uniseg"
 	"lazypass/internal/tui/input"
 	"lazypass/internal/tui/shared"
@@ -26,6 +27,7 @@ func (s *screen) openKeybindings() {
 	actions := append([]shared.Action(nil), s.viewActions().Actions...)
 	actions = append(actions, shared.Action{Hint: "z", Label: "compact mode"}, shared.Action{Hint: "?", Label: "keybindings"})
 	if s.route == VaultRoute {
+		actions = append(actions, shared.Action{Hint: "c", Label: "copy entry value / folder name"})
 		if !s.vault.HasStagedTransfers() {
 			actions = append(actions, shared.Action{Hint: "p", Label: "paste staged items"})
 		}
@@ -139,4 +141,26 @@ func (s *screen) drawKeybindings(screen tcell.Screen, frame shared.Frame) {
 			shared.PrintStyled(screen, labelX, y, shared.Truncate(actions[i].Label, max(0, content.W-keyWidth-1)), rowStyle)
 		}
 	})
+}
+
+func (s *screen) handleKeybindingsMouse(action tview.MouseAction, event *tcell.EventMouse) {
+	k := &s.keybindings
+	v := s.frame().Viewport
+	r := shared.CenteredPanel(v, 70, min(24, v.H-2))
+	x, y := event.Position()
+	if !r.Contains(x, y) {
+		return
+	}
+	switch action {
+	case tview.MouseScrollUp:
+		k.moveSelection(-1)
+	case tview.MouseScrollDown:
+		k.moveSelection(1)
+	case tview.MouseLeftClick:
+		start, end := k.viewport.Window(len(k.filteredActions()), max(0, r.H-6), k.selected)
+		index := start + y - r.Y - 3
+		if y >= r.Y+3 && index >= start && index < end {
+			k.selected = index
+		}
+	}
 }

@@ -12,6 +12,21 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+func themePanelRect(viewport shared.Rect) shared.Rect {
+	return shared.CenteredPanel(viewport, min(64, viewport.W-2), min(15, viewport.H-2))
+}
+
+func (s *Panel) pickerWindow(r shared.Rect) (matches []int, y, start, end int) {
+	matches = s.matchingThemes()
+	y, limit := r.Y+2, r.H-5
+	if s.filtering {
+		y, limit = r.Y+4, r.H-7
+	}
+	position := max(0, slices.Index(matches, s.selected))
+	start, end = s.listViewport.Window(len(matches), max(0, limit), position)
+	return matches, y, start, end
+}
+
 func (s *Panel) previewTheme(name string) bool {
 	p, err := theme.Load(name)
 	if err != nil {

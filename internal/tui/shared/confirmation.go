@@ -4,6 +4,7 @@ import (
 	"lazypass/internal/tui/input"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type ConfirmationOptions struct {
@@ -84,7 +85,7 @@ func (c *Confirmation) actions() []Action {
 			Invoke: c.confirm,
 		},
 		{
-			Hint:  "Esc",
+			Hint:  "<esc>",
 			Label: "cancel",
 			Match: func(e *tcell.EventKey) bool {
 				if e.Key() == tcell.KeyEscape {
@@ -123,17 +124,10 @@ func (c *Confirmation) Draw(screen tcell.Screen, frame Frame) {
 	}
 
 	screen.HideCursor()
-	width := min(c.Options.Width, max(0, frame.Viewport.W-2))
-	if width < 20 {
+	r, lines := c.layout(frame.Viewport)
+	if r.W < 20 {
 		return
 	}
-
-	lines := WrapText(c.Options.Message, width-4)
-	height := len(lines) + 5
-	if c.Options.RequireText != "" {
-		height += 3
-	}
-	r := CenteredPanel(frame.Viewport, width, height)
 	color := frame.Palette.Focus
 	if c.Options.Destructive {
 		color = tcell.ColorRed
@@ -164,6 +158,31 @@ func (c *Confirmation) Draw(screen tcell.Screen, frame Frame) {
 			c.editor.Draw(screen, content.X, y+2, content.W, 1, tcell.StyleDefault.Foreground(frame.Palette.Focus).Background(frame.Palette.Surface), !c.Busy, c.inputOptions())
 		}
 	})
+}
+
+func (c *Confirmation) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, frame Frame) {
+	if c == nil || c.closed || action != tview.MouseLeftClick {
+		return
+	}
+	r, _ := c.layout(frame.Viewport)
+	if r.W < 20 {
+		return
+	}
+	footer := Footer{Actions: c.actions()}
+	x, y := event.Position()
+	if item, ok := footer.HitAction(Rect{X: r.X + 2, Y: r.Y + r.H - 2, W: max(0, r.W-4), H: 1}, FooterOptions{MaxRows: 1}, x, y); ok && item.Invoke != nil {
+		item.Invoke()
+	}
+}
+
+func (c *Confirmation) layout(viewport Rect) (Rect, []string) {
+	width := min(c.Options.Width, max(0, viewport.W-2))
+	lines := WrapText(c.Options.Message, max(0, width-4))
+	height := len(lines) + 5
+	if c.Options.RequireText != "" {
+		height += 3
+	}
+	return CenteredPanel(viewport, width, height), lines
 }
 
 func (c *Confirmation) inputOptions() input.Options {

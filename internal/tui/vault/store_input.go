@@ -28,22 +28,42 @@ func (s *StoreForm) HandleKey(event *tcell.EventKey) {
 	if s.choosingType {
 		switch event.Key() {
 		case tcell.KeyEscape:
-			s.Close()
+			if s.actionFiltering || s.actionFilter != "" {
+				s.actionFiltering = false
+				s.actionFilter = ""
+				s.actionIndex = 0
+			} else {
+				s.Close()
+			}
 		case tcell.KeyDown, tcell.KeyTAB:
 			s.moveEntryType(1)
 		case tcell.KeyUp, tcell.KeyBacktab:
 			s.moveEntryType(-1)
 		case tcell.KeyEnter:
 			s.chooseCreateAction()
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			if s.actionFiltering {
+				s.actionFilter = shared.DeleteLastRune(s.actionFilter)
+				s.actionIndex = 0
+			}
+		case tcell.KeyCtrlU:
+			if s.actionFiltering {
+				s.actionFilter = ""
+				s.actionIndex = 0
+			}
 		case tcell.KeyRune:
-			switch event.Rune() {
-			case 'j':
-				s.moveEntryType(1)
-			case 'k':
-				s.moveEntryType(-1)
-			default:
-				s.chooseCreateAction()
-				s.HandleKey(event)
+			if s.actionFiltering {
+				s.actionFilter += string(event.Rune())
+				s.actionIndex = 0
+			} else {
+				switch event.Rune() {
+				case '/':
+					s.actionFiltering = true
+				case 'j':
+					s.moveEntryType(1)
+				case 'k':
+					s.moveEntryType(-1)
+				}
 			}
 		}
 		return

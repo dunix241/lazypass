@@ -26,6 +26,7 @@ func TestManualAddFolderAndNestedValue(t *testing.T) {
 	saved := 0
 	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: p}, Password: func() string { t.Fatal("manual Add used Generator"); return "" }, RunPrompted: func(fn func(context.Context) error) error { prompted = true; return fn(context.Background()) }, Saved: func(vault.Path) { saved++ }})
 	s.OpenAdd(vault.Path{"personal"})
+	storeKey(s, tcell.KeyEnter, 0)
 	for _, r := range "mail/" {
 		storeKey(s, tcell.KeyRune, r)
 	}
@@ -34,6 +35,7 @@ func TestManualAddFolderAndNestedValue(t *testing.T) {
 		t.Fatal("folder creation failed")
 	}
 	s.OpenAdd(vault.Path{"personal"})
+	storeKey(s, tcell.KeyEnter, 0)
 	for _, r := range "mail/account" {
 		storeKey(s, tcell.KeyRune, r)
 	}
@@ -72,6 +74,7 @@ func TestManualAddFolderAndNestedValue(t *testing.T) {
 func TestManualAddCancelAndEditing(t *testing.T) {
 	s := NewStoreForm(StoreDependencies{Service: service.Service{Provider: &memoryVault{}}})
 	s.OpenAdd(nil)
+	storeKey(s, tcell.KeyEnter, 0)
 	for _, r := range "entry" {
 		storeKey(s, tcell.KeyRune, r)
 	}

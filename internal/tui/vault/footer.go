@@ -22,10 +22,7 @@ func (s *View) FooterRows(width, maxRows int) []string {
 
 func (s *View) FooterActions() shared.Footer {
 	if s.renameTarget != nil {
-		return shared.Footer{Actions: []shared.Action{
-			{Hint: "CR", Label: "rename", Key: tcell.NewEventKey(tcell.KeyEnter, 0, 0), Priority: shared.Essential},
-			{Hint: "esc", Label: "cancel", Key: tcell.NewEventKey(tcell.KeyEscape, 0, 0), Priority: shared.Essential},
-		}}
+		return shared.Footer{Actions: s.renameActions()}
 	}
 	if s.IsTransferActive() {
 		return shared.Footer{Actions: []shared.Action{{Hint: "esc", Label: "cancel paste", Key: tcell.NewEventKey(tcell.KeyEscape, 0, 0), Priority: shared.Essential}}}
@@ -41,7 +38,6 @@ func (s *View) FooterActions() shared.Footer {
 	actions = append(actions, []shared.Action{
 		{Hint: "y", Label: "yank", Priority: shared.Primary},
 		{Hint: "x", Label: "cut", Priority: shared.Primary},
-		{Hint: "c", Label: "copy", Priority: shared.Secondary},
 		{Hint: "m", Label: mark, Priority: shared.Secondary},
 		{Hint: "M", Label: "mark range", Priority: shared.Secondary},
 		{Hint: "d", Label: remove, Priority: shared.Essential},

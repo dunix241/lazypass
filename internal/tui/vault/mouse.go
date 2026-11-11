@@ -9,7 +9,18 @@ import (
 )
 
 func (s *View) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, frame shared.Frame) shared.MouseResult {
-	if s.IsConfirmingDelete() || s.IsTransferActive() {
+	if s.IsConfirmingDelete() {
+		s.deleteDialog.HandleMouse(action, event, frame)
+		return shared.MouseResult{Consumed: true, Capture: true}
+	}
+	if s.IsTransferActive() {
+		if s.renameTarget != nil && action == tview.MouseLeftClick {
+			r := shared.CenteredPanel(frame.Viewport, min(64, max(0, frame.Viewport.W-2)), 7)
+			x, y := event.Position()
+			if item, ok := (shared.Footer{Actions: s.renameActions()}).HitAction(shared.Rect{X: r.X + 2, Y: r.Y + r.H - 2, W: r.W - 4, H: 1}, shared.FooterOptions{MaxRows: 1}, x, y); ok {
+				s.handleRenameKey(item.Key)
+			}
+		}
 		return shared.MouseResult{Consumed: true, Capture: true}
 	}
 	consume := shared.MouseResult{Consumed: true, Capture: true}

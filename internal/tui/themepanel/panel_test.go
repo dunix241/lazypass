@@ -261,7 +261,7 @@ func TestThemePanelRendersInsideWideAndCompactViewports(t *testing.T) {
 		if !strings.Contains(cells.String(), "Theme") || !strings.Contains(cells.String(), "/ filter") || strings.Contains(cells.String(), "<esc> close") {
 			t.Fatal("picker hints missing")
 		}
-		if size[0] >= 50 && !strings.Contains(cells.String(), "a add  e edit  d delete  / filter") {
+		if size[0] >= 50 && !strings.Contains(cells.String(), "a add  •  e edit  •  d delete  •  / filter") {
 			t.Fatal("full picker actions missing")
 		}
 	}

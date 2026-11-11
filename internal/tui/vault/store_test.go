@@ -102,7 +102,7 @@ func TestStorePickerMouseSelectsAndCompletesFolder(t *testing.T) {
 	if s.storeSelected != 1 {
 		t.Fatal("mouse selection failed")
 	}
-	s.HandleMouse(tview.MouseLeftClick, event, f)
+	s.HandleMouse(tview.MouseLeftDoubleClick, event, f)
 	if s.storePath != "personal/" {
 		t.Fatal("mouse completion failed")
 	}

@@ -90,6 +90,13 @@ func (s *View) drawRename(screen tcell.Screen, frame shared.Frame) {
 	shared.Panel{Bounds: r, Title: "Rename", Border: frame.Palette.Focus, Background: frame.Palette.Surface}.Draw(screen, func(content shared.Rect) {
 		shared.PrintAt(screen, content.X, content.Y, "Name", frame.Palette.Text)
 		s.transfer.editor.Draw(screen, content.X, content.Y+2, content.W, 1, tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Surface), true, input.Options{MaxBytes: 255})
-		shared.PrintAt(screen, content.X, content.Y+content.H-1, "<CR> rename  •  <esc> cancel", frame.Palette.Muted)
+		shared.Footer{Actions: s.renameActions(), Color: frame.Palette.Muted}.Draw(screen, shared.Rect{X: content.X, Y: content.Y + content.H - 1, W: content.W, H: 1})
 	})
+}
+
+func (s *View) renameActions() []shared.Action {
+	return []shared.Action{
+		{Hint: "<CR>", Label: "rename", Key: tcell.NewEventKey(tcell.KeyEnter, 0, 0)},
+		{Hint: "<esc>", Label: "cancel", Key: tcell.NewEventKey(tcell.KeyEscape, 0, 0)},
+	}
 }

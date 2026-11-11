@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
@@ -13,6 +14,34 @@ type renameProvider struct {
 	memoryVault
 	name string
 	path vault.Path
+}
+
+func TestRenamePopupMouseActions(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		p := &renameProvider{memoryVault: memoryVault{nodes: map[string][]vault.Node{"": {{Name: "original", Path: vault.Path{"original"}, Kind: vault.EntryNode}}}}}
+		v := New(Dependencies{Service: service.Service{Provider: p}})
+		v.Refresh()
+		v.openRename()
+		key(v, tcell.KeyCtrlU, 0)
+		v.PasteTransferName("new-name")
+		frame := testFrame()
+		r := shared.CenteredPanel(frame.Viewport, min(64, max(0, frame.Viewport.W-2)), 7)
+		bounds := shared.Rect{X: r.X + 2, Y: r.Y + r.H - 2, W: r.W - 4, H: 1}
+		hint := "<CR>"
+		if cancel {
+			hint = "<esc>"
+		}
+		for x := bounds.X; x < bounds.X+bounds.W; x++ {
+			item, ok := (shared.Footer{Actions: v.renameActions()}).HitAction(bounds, shared.FooterOptions{MaxRows: 1}, x, bounds.Y)
+			if ok && item.Hint == hint {
+				v.HandleMouse(tview.MouseLeftClick, tcell.NewEventMouse(x, bounds.Y, tcell.Button1, 0), frame)
+				break
+			}
+		}
+		if v.renameTarget != nil || (p.name == "new-name") == cancel {
+			t.Fatal("rename popup click failed")
+		}
+	}
 }
 
 func TestCanceledRenameDiscardsLateSuccess(t *testing.T) {

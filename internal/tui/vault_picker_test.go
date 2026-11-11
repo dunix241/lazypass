@@ -82,6 +82,7 @@ func TestVaultPickerPreservesFolderStateAndRoutesWrites(t *testing.T) {
 		t.Fatal("vault not switched")
 	}
 	key(tcell.KeyRune, 'a')
+	key(tcell.KeyEnter, 0)
 	for _, r := range "entry" {
 		key(tcell.KeyRune, r)
 	}
