@@ -34,7 +34,7 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 			s.toggleMark(false)
 		case 'M':
 			s.toggleMark(true)
-		case 'o':
+		case 'C':
 			s.copyEntry(true)
 		case 'r':
 			s.refreshProvider()

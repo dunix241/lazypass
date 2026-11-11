@@ -32,7 +32,7 @@ func (s *View) FooterActions() shared.Footer {
 		{Hint: "D", Label: "recursive delete", Priority: shared.Secondary},
 		{Hint: "a", Label: "add", Priority: shared.Primary},
 		{Hint: "e", Label: "edit", Priority: shared.Primary},
-		{Hint: "o", Label: "copy code", Priority: shared.Primary},
+		{Hint: "C", Label: "copy code", Priority: shared.Primary},
 		{Hint: "r", Label: "refresh", Priority: shared.Secondary},
 		{Hint: "h", Label: "back", Priority: shared.Essential},
 		{Hint: "l", Label: "open/copy", Priority: shared.Essential},

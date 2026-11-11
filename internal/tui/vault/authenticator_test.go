@@ -43,7 +43,7 @@ func TestCanceledAuthenticatorCopyDoesNotTouchClipboard(t *testing.T) {
 		RunOperation: func(w func(context.Context) error, d func(error)) { work, done = w, d },
 	})
 	v.vaultNodes = p.nodes[""]
-	v.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'o', 0))
+	v.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'C', 0))
 	v.CancelCopy()
 	err := work(context.Background())
 	done(err)
