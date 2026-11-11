@@ -18,6 +18,8 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		return
 	}
 	switch event.Key() {
+	case tcell.KeyEscape:
+		s.marks = nil
 	case tcell.KeyUp:
 		s.moveVaultSelection(-1)
 	case tcell.KeyDown:
@@ -28,6 +30,10 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 		s.openVaultNode()
 	case tcell.KeyRune:
 		switch event.Rune() {
+		case 'm':
+			s.toggleMark(false)
+		case 'M':
+			s.toggleMark(true)
 		case 'o':
 			s.copyEntry(true)
 		case 'r':
@@ -48,6 +54,7 @@ func (s *View) HandleKey(event *tcell.EventKey) {
 				s.deps.OpenAdd()
 			}
 		case '/':
+			s.marks = nil
 			s.ClearAuthenticators()
 			s.vaultFiltering, s.vaultFilter, s.vaultSelected = true, "", 0
 			s.loadSearchNodes()

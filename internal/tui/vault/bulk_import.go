@@ -40,19 +40,21 @@ func (row bulkRow) destinationPath(parent vault.Path) (vault.Path, error) {
 }
 
 type bulkImport struct {
-	destination vault.Path
-	folders     []vault.Node
-	folderIndex int
-	message     string
-	completed   atomic.Int32
-	total       int
-	cancel      context.CancelFunc
-	batch       otp.MigrationBatch
-	rows        []bulkRow
-	phase       string
-	text        string
-	index       int
-	changed     bool
+	listViewport        shared.ListViewport
+	destinationViewport shared.ListViewport
+	destination         vault.Path
+	folders             []vault.Node
+	folderIndex         int
+	message             string
+	completed           atomic.Int32
+	total               int
+	cancel              context.CancelFunc
+	batch               otp.MigrationBatch
+	rows                []bulkRow
+	phase               string
+	text                string
+	index               int
+	changed             bool
 }
 
 func (s *StoreForm) handleBulkKey(event *tcell.EventKey) {
@@ -331,7 +333,7 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintAt(screen, r.X+2, y, shared.Truncate(label, r.W-4), frame.Palette.Muted)
 		y += 2
 		limit := max(1, r.Y+r.H-2-y)
-		start := max(0, b.folderIndex-limit+1)
+		start, _ := b.destinationViewport.Window(len(b.folders)+1, limit, b.folderIndex)
 		for i := start; i <= len(b.folders) && i < start+limit; i++ {
 			label := "Use this location"
 			if i > 0 {
@@ -395,7 +397,7 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintPanelFooter(screen, r, shared.FitHints(r.W-4, hint, "<CR> next  •  <esc> cancel"), frame.Palette.Muted)
 	default:
 		limit := max(1, r.Y+r.H-2-y)
-		start := max(0, b.index-limit+1)
+		start, _ := b.listViewport.Window(len(b.rows), limit, b.index)
 		for i := start; i < len(b.rows) && i < start+limit; i++ {
 			row := b.rows[i]
 			prefix := "[ ] "

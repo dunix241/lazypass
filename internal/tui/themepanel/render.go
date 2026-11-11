@@ -32,7 +32,7 @@ func (s *Panel) Draw(screen tcell.Screen, frame shared.Frame) {
 		case themeEditor:
 			shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Edit "+s.names[s.selected], w-4), colors.Text)
 			rows := min(len(themeRoles), h-5)
-			start := max(0, s.role-rows+1)
+			start, _ := s.roleViewport.Window(len(themeRoles), rows, s.role)
 			for row := 0; row < rows; row++ {
 				i := start + row
 				value, color := *paletteRole(&s.pending, i), colors.Muted
@@ -57,7 +57,7 @@ func (s *Panel) Draw(screen tcell.Screen, frame shared.Frame) {
 			}
 			rows := min(len(matches), limit)
 			position := max(0, slices.Index(matches, s.selected))
-			start := max(0, position-rows+1)
+			start, _ := s.listViewport.Window(len(matches), rows, position)
 			for i := 0; i < rows; i++ {
 				index := matches[start+i]
 				prefix, color := "  ", colors.Text

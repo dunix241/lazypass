@@ -28,23 +28,25 @@ type Dependencies struct {
 }
 
 type Panel struct {
-	open       bool
-	mode       themePanelMode
-	names      []string
-	selected   int
-	filtering  bool
-	query      string
-	original   shared.Palette
-	originalID string
-	pending    theme.Palette
-	name       string
-	nameEdits  bool
-	role       int
-	colorText  string
-	colorEdits bool
-	previewed  bool
-	error      string
-	deps       Dependencies
+	listViewport shared.ListViewport
+	roleViewport shared.ListViewport
+	open         bool
+	mode         themePanelMode
+	names        []string
+	selected     int
+	filtering    bool
+	query        string
+	original     shared.Palette
+	originalID   string
+	pending      theme.Palette
+	name         string
+	nameEdits    bool
+	role         int
+	colorText    string
+	colorEdits   bool
+	previewed    bool
+	error        string
+	deps         Dependencies
 }
 
 func New(deps Dependencies) *Panel { return &Panel{deps: deps} }

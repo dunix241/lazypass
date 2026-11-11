@@ -127,7 +127,5 @@ func (s *StoreForm) suggestionWindow(visible int) (start, end int) {
 	if visible <= 0 || len(s.storeNodes) == 0 {
 		return 0, 0
 	}
-	selected := max(0, min(s.storeSelected, len(s.storeNodes)-1))
-	start = max(0, selected-visible+1)
-	return start, min(start+visible, len(s.storeNodes))
+	return s.suggestionViewport.Window(len(s.storeNodes), visible, s.storeSelected)
 }

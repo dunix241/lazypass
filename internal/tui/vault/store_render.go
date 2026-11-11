@@ -49,14 +49,17 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		return
 	}
 	if s.choosingType {
-		for i, action := range s.createActions() {
+		actions := s.createActions()
+		start, end := s.actionViewport.Window(len(actions), max(0, r.H-4), s.actionIndex)
+		for i := start; i < end; i++ {
+			action := actions[i]
 			color := colors.Text
 			prefix := "  "
 			if i == s.actionIndex {
 				color = colors.Focus
 				prefix = "> "
 			}
-			shared.PrintAt(screen, r.X+2, r.Y+2+i, prefix+action.label, color)
+			shared.PrintAt(screen, r.X+2, r.Y+2+i-start, prefix+action.label, color)
 		}
 		shared.PrintPanelFooter(screen, r, "↑/↓ select", colors.Muted)
 		return

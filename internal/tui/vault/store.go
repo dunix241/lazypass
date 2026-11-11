@@ -23,6 +23,9 @@ type StoreDependencies struct {
 }
 
 type StoreForm struct {
+	suggestionViewport   shared.ListViewport
+	fieldViewport        shared.ListViewport
+	actionViewport       shared.ListViewport
 	bulk                 *bulkImport
 	qrImage              image.Image
 	qrExport             bool

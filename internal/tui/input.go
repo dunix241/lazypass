@@ -30,6 +30,13 @@ func (s *screen) InputHandler() func(*tcell.EventKey, func(tview.Primitive)) {
 			s.vault.HandleKey(event)
 			return
 		}
+		if s.route == VaultRoute && event.Key() == tcell.KeyEscape && s.vault.HasMarks() {
+			if s.vault.CancelMarkedDelete() {
+				return
+			}
+			s.vault.ClearMarks()
+			return
+		}
 		if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && event.Rune() == 'q') {
 			s.save()
 			s.quit()

@@ -9,6 +9,7 @@ for next time.
 - Customizable password length and character sets, with a live strength meter.
 - Encrypted vaults for generated passwords and values you already have.
 - Multiple vaults, folders, recursive search, and entry editing.
+- Built-in authenticator with live codes, QR support, and Google Authenticator import.
 - Built-in themes and a custom-theme editor.
 - Clipboard support locally and over SSH.
 - Plain text and JSON output for scripts.

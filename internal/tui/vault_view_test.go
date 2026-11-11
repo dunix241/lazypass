@@ -58,3 +58,22 @@ func TestVaultFilterIsolatesGlobalShortcuts(t *testing.T) {
 		t.Fatal("filter leaked global shortcuts")
 	}
 }
+
+func TestVaultEscapeClearsMarksBeforeGlobalQuit(t *testing.T) {
+	p := &memoryVault{nodes: map[string][]vault.Node{
+		"": {{Name: "mail", Path: vault.Path{"mail"}, Kind: vault.EntryNode}},
+	}}
+	a := NewApp(config.Defaults(), "", nil, WithVault(service.Service{Provider: p}), WithInitialRoute(VaultRoute))
+	a.screen.vault.Refresh()
+	quit := false
+	a.screen.quit = func() { quit = true }
+	handle := a.screen.InputHandler()
+	handle(tcell.NewEventKey(tcell.KeyRune, 'm', tcell.ModNone), nil)
+	if !a.screen.vault.HasMarks() {
+		t.Fatal("entry was not marked")
+	}
+	handle(tcell.NewEventKey(tcell.KeyEscape, 0, tcell.ModNone), nil)
+	if quit || a.screen.vault.HasMarks() {
+		t.Fatal("Escape must clear marks without quitting")
+	}
+}

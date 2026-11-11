@@ -14,6 +14,8 @@ import (
 func (s *screen) activateVault(index int) {
 	s.vaultActivation++
 	if s.vault != nil {
+		s.vault.CancelMarkedDelete()
+		s.vault.ClearMarks()
 		s.vault.ClearAuthenticators()
 		s.vault.CancelCopy()
 		s.vault.CancelSearch()
@@ -85,6 +87,7 @@ func (s *screen) openVaultPicker() {
 		return
 	}
 	s.vaultPickerSelected = s.vaultIndex
+	s.vaultPickerViewport = shared.ListViewport{}
 	s.openOverlay(vaultPickerOverlay, func() bool { return true })
 }
 
@@ -120,7 +123,7 @@ func (s *screen) drawVaultPicker(screen tcell.Screen, frame shared.Frame) {
 	w, h := min(60, v.W-2), min(len(s.vaults)+4, v.H-2)
 	r := shared.CenteredPanel(v, w, h)
 	shared.Panel{Bounds: r, Title: "Vaults", TitleColor: frame.Palette.Accent, Footer: "↑/↓ select", FooterColor: frame.Palette.Muted, Border: frame.Palette.Border, Background: frame.Palette.Surface}.Draw(screen, func(content shared.Rect) {
-		start := max(0, s.vaultPickerSelected-(h-4)+1)
+		start, _ := s.vaultPickerViewport.Window(len(s.vaults), h-4, s.vaultPickerSelected)
 		for row := 0; row < h-4 && start+row < len(s.vaults); row++ {
 			i := start + row
 			prefix, color := "  ", frame.Palette.Text
@@ -147,6 +150,8 @@ func (s *screen) closeVaults() {
 	s.finishUnlock(unlockReply{err: context.Canceled})
 	for _, view := range s.vaultViews {
 		if view != nil {
+			view.CancelMarkedDelete()
+			view.ClearMarks()
 			view.ClearAuthenticators()
 			view.CancelCopy()
 			view.CancelSearch()

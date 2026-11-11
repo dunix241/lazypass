@@ -8,11 +8,12 @@ import (
 )
 
 type Action struct {
-	Label   string
-	Hint    string
-	Match   func(*tcell.EventKey) bool
-	Enabled func() bool
-	Invoke  func()
+	Priority int
+	Label    string
+	Hint     string
+	Match    func(*tcell.EventKey) bool
+	Enabled  func() bool
+	Invoke   func()
 }
 
 // Footer shares action presentation between panel and screen-level placements.

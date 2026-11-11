@@ -113,6 +113,17 @@ func (s *View) refresh(selectPath string) {
 			selectPath = current.Path.String()
 		}
 		s.vaultNodes = nodes
+		if err == nil && !s.vaultFiltering {
+			present := make(map[string]bool, len(nodes))
+			for _, node := range nodes {
+				present[markID(node)] = true
+			}
+			for id := range s.marks {
+				if !present[id] {
+					delete(s.marks, id)
+				}
+			}
+		}
 		if err == nil {
 			if s.cachedLocations == nil {
 				s.cachedLocations = make(map[string][]vault.Node)
@@ -217,6 +228,8 @@ func (s *View) loadBrowserCache(selectPath string) bool {
 }
 
 func (s *View) navigate(path vault.Path, selected int, selectPath string) {
+	s.marks = nil
+	s.viewport = shared.ListViewport{}
 	s.ClearAuthenticators()
 	s.CancelSearch()
 	s.searchNodes, s.searchLoaded = nil, false

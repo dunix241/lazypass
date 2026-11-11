@@ -66,9 +66,11 @@ func TestVaultFooterUsesVaultHintsAtEveryWidth(t *testing.T) {
 		a.screen.SetRect(0, 0, width, 24)
 		a.screen.Draw(sim)
 		var footer strings.Builder
-		for x := 0; x < width; x++ {
-			cell, _, _ := sim.Get(x, 23)
-			footer.WriteString(cell)
+		for y := 22; y < 24; y++ {
+			for x := 0; x < width; x++ {
+				cell, _, _ := sim.Get(x, y)
+				footer.WriteString(cell)
+			}
 		}
 		sim.Fini()
 		text := footer.String()

@@ -27,40 +27,43 @@ type Dependencies struct {
 func (s *View) CurrentPath() vault.Path { return append(vault.Path(nil), s.vaultPath...) }
 
 type View struct {
-	awaitingUnlock    bool
-	authenticators    authenticatorState
-	copyCancel        context.CancelFunc
-	refreshCompletion func(error)
-	deletePlan        *vault.DeletePlan
-	deleteRecursive   bool
-	deleteDialog      *shared.Confirmation
-	deleteGeneration  uint64
-	locationParents   map[string]vault.Path
-	cachedLocations   map[string][]vault.Node
-	cacheLoaded       bool
-	cacheLoading      bool
-	syncing           bool
-	locationLabels    map[string]string
-	metadataLoading   bool
-	refreshing        bool
-	deleting          bool
-	loading           bool
-	copying           bool
-	loadGeneration    uint64
-	vault             service.Service
-	vaultPath         vault.Path
-	vaultNodes        []vault.Node
-	vaultSelected     int
-	vaultError        string
-	vaultFilter       string
-	vaultFiltering    bool
-	searchNodes       []vault.Node
-	searchLoaded      bool
-	searchCancel      context.CancelFunc
-	searchGeneration  uint64
-	searching         bool
-	deps              Dependencies
-	deleteTarget      *vault.Node
+	markedDeleteCancel context.CancelFunc
+	marks              map[string]bool
+	viewport           shared.ListViewport
+	awaitingUnlock     bool
+	authenticators     authenticatorState
+	copyCancel         context.CancelFunc
+	refreshCompletion  func(error)
+	deletePlan         *vault.DeletePlan
+	deleteRecursive    bool
+	deleteDialog       *shared.Confirmation
+	deleteGeneration   uint64
+	locationParents    map[string]vault.Path
+	cachedLocations    map[string][]vault.Node
+	cacheLoaded        bool
+	cacheLoading       bool
+	syncing            bool
+	locationLabels     map[string]string
+	metadataLoading    bool
+	refreshing         bool
+	deleting           bool
+	loading            bool
+	copying            bool
+	loadGeneration     uint64
+	vault              service.Service
+	vaultPath          vault.Path
+	vaultNodes         []vault.Node
+	vaultSelected      int
+	vaultError         string
+	vaultFilter        string
+	vaultFiltering     bool
+	searchNodes        []vault.Node
+	searchLoaded       bool
+	searchCancel       context.CancelFunc
+	searchGeneration   uint64
+	searching          bool
+	deps               Dependencies
+	deleteTarget       *vault.Node
 }
 
 func (s *View) CancelCopy() {

@@ -25,6 +25,7 @@ func (s *StoreForm) loadBulkDestination(path vault.Path) {
 			return
 		}
 		b.destination, b.folderIndex = path, 0
+		b.destinationViewport = shared.ListViewport{}
 		b.text = path.String()
 		b.folders = nil
 		for _, node := range nodes {

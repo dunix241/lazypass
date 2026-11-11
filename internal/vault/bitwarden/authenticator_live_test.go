@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gdamore/tcell/v2"
 	"lazypass/internal/otp"
+	vaultui "lazypass/internal/tui/vault"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 )
@@ -26,7 +28,7 @@ func TestAuthenticatorLive(t *testing.T) {
 		return strings.TrimRight(string(data), "\r\n"), err
 	}, nil)
 	defer p.Lock()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	before, err := p.deletionSnapshot(ctx)
 	if err != nil {
@@ -159,4 +161,49 @@ func TestAuthenticatorLive(t *testing.T) {
 			}
 		})
 	}
+	t.Run("marked deletion through UI", func(t *testing.T) {
+		snapshot, err := p.deletionSnapshot(ctx)
+		if err != nil {
+			t.Fatal("fixture listing failed")
+		}
+		var nodes []vault.Node
+		for _, entry := range append(snapshot.items, snapshot.excluded...) {
+			if created[entry.ID] {
+				nodes = append(nodes, vault.Node{Name: entry.Name, Path: vault.Path{"Folders", noFolderID, entry.ID}, Kind: vault.EntryNode, Shared: entry.OrganizationID != ""})
+			}
+		}
+		if len(nodes) != 2 {
+			t.Fatal("expected two active disposable fixtures")
+		}
+		provider := &markedFixtureProvider{Provider: p, nodes: nodes}
+		view := vaultui.New(vaultui.Dependencies{Service: service.Service{Provider: provider}, RunPrompted: func(work func(context.Context) error) error { return work(ctx) }})
+		view.Refresh()
+		for _, r := range "mjMd" {
+			view.HandleKey(tcell.NewEventKey(tcell.KeyRune, r, 0))
+		}
+		if !view.IsConfirmingDelete() {
+			t.Fatal("marked confirmation not opened")
+		}
+		view.PasteConfirmation("DELETE 2")
+		view.HandleKey(tcell.NewEventKey(tcell.KeyEnter, 0, 0))
+		after, err := p.deletionSnapshot(ctx)
+		if err != nil {
+			t.Fatal("marked deletion verification failed")
+		}
+		for _, entry := range append(after.items, after.excluded...) {
+			if created[entry.ID] {
+				t.Fatal("marked fixture remains active")
+			}
+		}
+	})
+}
+
+// Restrict UI listing to captured fixture IDs so no existing entry can be marked.
+type markedFixtureProvider struct {
+	*Provider
+	nodes []vault.Node
+}
+
+func (p *markedFixtureProvider) List(context.Context, vault.Path) ([]vault.Node, error) {
+	return p.nodes, nil
 }

@@ -18,6 +18,10 @@ func (s *View) cancelDelete() {
 }
 
 func (s *View) openDelete() {
+	if len(s.marks) > 0 {
+		s.openMarkedDelete()
+		return
+	}
 	if s.deleting {
 		return
 	}

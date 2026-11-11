@@ -333,6 +333,15 @@ os.close(master);os.close(slave)
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)
 	}
+	for _, name := range []string{"marked-a", "marked-b"} {
+		if err := p.Create(context.Background(), vault.Entry{Path: vault.Path{"hello", name}, Password: "public-mark-fixture"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	drive("l|WAITUI:marked-a|m|WAITUI:1 marked|\x1b|ABSENT:1 marked|m|j|M|WAITUI:2 marked|d|WAITUI:Delete 2 marked entries|DELETE 2|\r|WAITUI:Deleted marked entries|q")
+	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
+		t.Fatal("marked PTY deletion left entries")
+	}
 	drive("D|WAITUI:Delete folder|hello|\r|WAITABSENT:" + filepath.Join(root, "hello") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), nil); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI folder delete: %v %v", nodes, err)

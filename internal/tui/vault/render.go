@@ -19,6 +19,9 @@ func (s *View) Draw(screen tcell.Screen, frame shared.Frame) {
 	if s.deps.Name != "" {
 		title += " · " + s.deps.Name
 	}
+	if len(s.marks) > 0 {
+		title += fmt.Sprintf(" · %d marked", len(s.marks))
+	}
 	shared.Panel{Bounds: r, Title: title + ": " + path, TitleColor: colors.Accent, Border: colors.Border, Background: colors.Surface}.Draw(screen, nil)
 	if s.vault.Provider == nil {
 		shared.PrintAt(screen, r.X+2, r.Y+2, shared.Truncate("Vault unavailable. Configure vault.provider.", r.W-4), colors.Warning)
@@ -72,11 +75,24 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 	if code != "" {
 		labelWidth = chip.X - r.X - 3
 	}
-	shared.PrintAt(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), labelWidth), nodeColor(node, frame.Palette))
+	background := frame.Palette.Surface
+	if s.marks[markID(node)] {
+		background = frame.Palette.Border
+		style := tcell.StyleDefault.Background(background)
+		for x := r.X + 2; x < r.X+r.W-2; x++ {
+			screen.SetContent(x, y, ' ', nil, style)
+		}
+	}
+	style := tcell.StyleDefault.Foreground(nodeColor(node, frame.Palette)).Background(background)
+	shared.PrintStyled(screen, r.X+2, y, shared.Truncate("  "+nodeLabel(node, frame.NerdFont), labelWidth), style)
 	if code == "Loading…" {
-		shared.PrintAt(screen, chip.X, y, code, frame.Palette.Muted)
+		shared.PrintStyled(screen, chip.X, y, code, tcell.StyleDefault.Foreground(frame.Palette.Muted).Background(background))
 	} else if code != "" {
-		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Border)
+		chipBackground := frame.Palette.Border
+		if s.marks[markID(node)] {
+			chipBackground = frame.Palette.Base
+		}
+		style := tcell.StyleDefault.Foreground(frame.Palette.Text).Background(chipBackground)
 		for offset, ch := range " " + code + " " {
 			screen.SetContent(chip.X+offset, y, ch, nil, style)
 		}
@@ -85,7 +101,7 @@ func (s *View) drawBrowserRow(screen tcell.Screen, frame shared.Frame, r shared.
 			if remaining <= 5 {
 				color = frame.Palette.Warning
 			}
-			shared.PrintAt(screen, chip.X+chip.W+1, y, fmt.Sprintf("%5ds", remaining), color)
+			shared.PrintStyled(screen, chip.X+chip.W+1, y, fmt.Sprintf("%5ds", remaining), tcell.StyleDefault.Foreground(color).Background(background))
 		}
 	}
 	if selected && s.deleteTarget == nil {
@@ -111,5 +127,6 @@ func (s *View) vaultListWindow(card shared.Rect) (listY, limit, start int) {
 	if s.vaultFiltering {
 		listY, limit = listY+1, limit-1
 	}
-	return listY, limit, max(0, s.vaultSelected-limit+1)
+	start, _ = s.viewport.Window(len(s.vaultDisplayNodes()), limit, s.vaultSelected)
+	return listY, limit, start
 }

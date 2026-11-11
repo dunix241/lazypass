@@ -27,6 +27,10 @@ func (s *View) filteredVaultNodes() []vault.Node {
 	return nodes
 }
 func (s *View) handleVaultFilterInput(event *tcell.EventKey) {
+	if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyCtrlU || event.Key() == tcell.KeyCtrlW || event.Key() == tcell.KeyBackspace || event.Key() == tcell.KeyBackspace2 || event.Key() == tcell.KeyRune {
+		s.ClearMarks()
+		s.viewport = shared.ListViewport{}
+	}
 	switch event.Key() {
 	case tcell.KeyEscape:
 		s.CancelSearch()
