@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"lazypass/internal/vault"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -98,6 +99,15 @@ func TestTransferLive(t *testing.T) {
 				t.Fatal("fixture ID missing")
 			}
 			source := append(append(vault.Path(nil), parent...), id)
+			attachmentPath := filepath.Join(t.TempDir(), "public-fixture.txt")
+			if err := os.WriteFile(attachmentPath, []byte("public attachment transfer fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			output, err := p.run(ctx, []string{"create", "attachment", "--file", attachmentPath, "--itemid", id}, nil)
+			clear(output)
+			if err != nil {
+				t.Fatal("attachment fixture creation failed")
+			}
 			if err := p.Rename(ctx, vault.Node{Path: source, Kind: vault.EntryNode}, name+"-renamed"); err != nil {
 				t.Fatal("native rename failed")
 			}
@@ -118,7 +128,7 @@ func TestTransferLive(t *testing.T) {
 				t.Fatal("copy preflight failed")
 			}
 			if err := p.Transfer(ctx, source, parent, name+"-copy", false); err != nil {
-				t.Fatal("native copy failed")
+				t.Fatal("native copy failed:", err)
 			}
 			s, err = p.deletionSnapshot(ctx)
 			if err != nil {

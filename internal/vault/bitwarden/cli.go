@@ -45,13 +45,14 @@ func (ExecRunner) Run(ctx context.Context, args []string, input io.Reader, env [
 type Prompt func() (string, error)
 
 type Provider struct {
-	DataDir  string
-	Server   string
-	Prompt   Prompt
-	Runner   Runner
-	mu       sync.RWMutex
-	session  string
-	metadata *snapshot
+	DataDir       string
+	Server        string
+	Prompt        Prompt
+	Runner        Runner
+	mu            sync.RWMutex
+	session       string
+	metadata      *snapshot
+	cloneAttempts map[[32]byte]*cloneAttempt
 	// Published snapshots are immutable; mutations invalidate metadata but retain
 	// the last browser snapshot until reconciliation or explicit locking.
 	browser atomic.Pointer[snapshot]
@@ -77,6 +78,7 @@ func (p *Provider) Lock() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.session = ""
+	p.cloneAttempts = nil
 	p.metadata = nil
 	p.browser.Store(nil)
 }

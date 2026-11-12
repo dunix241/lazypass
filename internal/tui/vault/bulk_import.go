@@ -310,7 +310,8 @@ func (s *StoreForm) executeBulk() {
 
 func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 	b := s.bulk
-	r := shared.CenteredPanel(frame.Viewport, min(76, frame.Viewport.W-4), min(20, frame.Viewport.H-4))
+	r := bulkRect(frame.Viewport)
+	defer drawPopupActions(screen, r, s.bulkActions(), frame.Palette.Muted)
 	shared.Panel{Bounds: r, Title: "Import authenticators", TitleColor: frame.Palette.Accent, Border: frame.Palette.Focus, Background: frame.Palette.Surface}.Draw(screen, nil)
 	step, title := bulkStep(b.phase)
 	y := r.Y + 2
@@ -322,7 +323,6 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 			message = fmt.Sprintf("Importing %d of %d", min(int(b.completed.Load())+1, b.total), b.total)
 		}
 		shared.PrintAt(screen, r.X+2, y, shared.Truncate(message, r.W-4), frame.Palette.Muted)
-		shared.PrintPanelFooter(screen, r, "<esc> cancel", frame.Palette.Muted)
 		return
 	}
 	if b.phase == "destination" {
@@ -345,16 +345,13 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 			}
 			shared.PrintAt(screen, r.X+2, y+i-start, shared.Truncate(label, r.W-4), color)
 		}
-		shared.PrintPanelFooter(screen, r, "<CR> next  •  <esc> back", frame.Palette.Muted)
 		return
 	}
 	switch b.phase {
 	case "images", "rename":
 		label := "Google Authenticator export PNG/JPEG:"
-		hint := "<ctrl-v> clipboard  •  <CR> next  •  <esc> cancel"
 		if b.phase == "rename" {
 			label = "Entry name:"
-			hint = "<CR> next  •  <esc> back"
 		}
 		if b.phase == "images" {
 			loaded, total := b.batch.Progress()
@@ -394,7 +391,6 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 		}
 		_, editor, options := s.activeInput()
 		editor.Draw(screen, r.X+2, min(y+1, r.Y+r.H-3), r.W-4, 1, tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Surface), true, options)
-		shared.PrintPanelFooter(screen, r, shared.FitHints(r.W-4, hint, "<CR> next  •  <esc> cancel"), frame.Palette.Muted)
 	default:
 		limit := max(1, r.Y+r.H-2-y)
 		start, _ := b.listViewport.Window(len(b.rows), limit, b.index)
@@ -416,15 +412,6 @@ func (s *StoreForm) drawBulk(screen tcell.Screen, frame shared.Frame) {
 			}
 			shared.PrintAt(screen, r.X+2, y+i-start, shared.Truncate(text, r.W-4), color)
 		}
-		hint := "<space> select  •  r rename  •  <CR> next  •  <esc> cancel"
-		if b.phase == "results" {
-			hint = "r review  •  c reconcile  •  <CR> finish  •  <esc> cancel"
-		}
-		fallback := "<CR> next  •  <esc> cancel"
-		if b.phase == "results" {
-			fallback = "<CR> finish  •  <esc> cancel"
-		}
-		shared.PrintPanelFooter(screen, r, shared.FitHints(r.W-4, hint, fallback), frame.Palette.Muted)
 	}
 }
 

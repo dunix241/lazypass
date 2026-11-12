@@ -1,14 +1,55 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"github.com/gdamore/tcell/v2"
 	"lazypass/internal/config"
 	"lazypass/internal/state"
+	vaultui "lazypass/internal/tui/vault"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 	"path/filepath"
 	"testing"
 )
+
+type lifecycleTransferVault struct{ memoryVault }
+
+func (*lifecycleTransferVault) CheckTransfer(context.Context, vault.Path, vault.Path, string, bool) error {
+	return nil
+}
+func (*lifecycleTransferVault) Transfer(context.Context, vault.Path, vault.Path, string, bool) error {
+	return nil
+}
+
+func TestVaultSwitchAndShutdownCancelPendingTransfer(t *testing.T) {
+	for _, shutdown := range []bool{false, true} {
+		p := &lifecycleTransferVault{memoryVault: memoryVault{nodes: map[string][]vault.Node{"": {{Name: "fixture", Path: vault.Path{"fixture"}, Kind: vault.EntryNode}}}}}
+		a := NewApp(config.Defaults(), "", nil, WithVaults([]NamedVault{{Name: "first", Service: service.Service{Provider: p}}, {Name: "second", Service: service.Service{Provider: &memoryVault{}}}}), WithInitialRoute(VaultRoute))
+		var work func(context.Context) error
+		var done func(error)
+		queued := vaultui.New(vaultui.Dependencies{Service: service.Service{Provider: p}, RunOperation: func(fn func(context.Context) error, finish func(error)) { work, done = fn, finish }})
+		queued.Refresh()
+		err := work(context.Background())
+		done(err)
+		a.screen.vault = queued
+		a.screen.vaultViews[0] = queued
+		queued.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'y', 0))
+		queued.HandleKey(tcell.NewEventKey(tcell.KeyRune, 'p', 0))
+		if shutdown {
+			a.screen.closeVaults()
+		} else {
+			a.screen.activateVault(1)
+		}
+		if err := work(context.Background()); !errors.Is(err, context.Canceled) {
+			t.Fatalf("pending operation survived leaving vault: %v", err)
+		}
+		done(nil)
+		if queued.IsTransferActive() {
+			t.Fatal("canceled transfer remained busy")
+		}
+	}
+}
 
 func TestVaultSelectionPersistsAcrossSessions(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())

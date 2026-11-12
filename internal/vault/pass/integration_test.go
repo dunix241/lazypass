@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -256,6 +257,10 @@ env=dict(os.environ,TERM="xterm-256color",SSH_CONNECTION="fixture")
 def terminal_session():
  os.setsid();fcntl.ioctl(slave,termios.TIOCSCTTY,0)
 p=subprocess.Popen([sys.argv[1],"--config",sys.argv[2],"vault"],stdin=slave,stdout=slave,stderr=slave,env=env,preexec_fn=terminal_session)
+def cleanup():
+ if p.poll() is None:
+  p.terminate();p.wait(timeout=10)
+__import__("atexit").register(cleanup)
 captured=bytearray()
 screen=pyte.Screen(84,24)
 stream=pyte.Stream(screen)
@@ -271,13 +276,34 @@ def wait_ui(expected):
  deadline=time.time()+20
  while time.time()<deadline:
   text="\n".join(screen.display)
-  if expected in text and "Loading" not in text: return
+  if expected in text and "Loading entry…" not in text: return
   drain(.05)
  raise AssertionError("UI did not reach "+repr(expected)+": "+repr("\n".join(screen.display)))
+def mouse_text(label, double=False):
+ wait_ui(label)
+ for y,row in enumerate(screen.display):
+  x=row.find(label)
+  if x>=0:
+   for _ in range(2 if double else 1):
+    os.write(master,f"\x1b[<0;{x+1};{y+1}M\x1b[<0;{x+1};{y+1}m".encode());drain(.08)
+   drain(.4);return
+ raise AssertionError("mouse target missing: "+label)
 wait_ui("No entries in this folder." if not os.path.isdir(os.path.join(os.environ["PASSWORD_STORE_DIR"],"hello")) else "hello/")
 for key in sys.argv[3].split("|"):
  if key.startswith("WAITUI:"):
   wait_ui(key[len("WAITUI:"):])
+ elif key.startswith("CLICK:"):
+  mouse_text(key[len("CLICK:"):])
+ elif key.startswith("DOUBLE:"):
+  mouse_text(key[len("DOUBLE:"):],True)
+ elif key.startswith("WHEEL:"):
+  direction,label=key[len("WHEEL:"):].split(":",1)
+  wait_ui(label)
+  for y,row in enumerate(screen.display):
+   x=row.find(label)
+   if x>=0:
+    button=65 if direction=="down" else 64
+    os.write(master,f"\x1b[<{button};{x+1};{y+1}M".encode());drain(.2);break
  elif key.startswith("ABSENT:"):
   assert key[len("ABSENT:"):] not in "\n".join(screen.display),"masked field exposed fixture"
  elif key.startswith("RESIZE:"):
@@ -325,6 +351,28 @@ os.close(master);os.close(slave)
 	if err != nil || entry.Password != "public-tui-fixture" {
 		t.Fatalf("TUI add failed: %v", err)
 	}
+	drive("a|WAITUI:Login|/|no-result|WAITUI:No matching entry types|\x1b|RESIZE:40x20|CLICK:Login|WAITUI:Login|DOUBLE:Login|WAITUI:Destination|\x1b|q")
+	drive("l|WAITUI:world|r|WAITUI:Name|RESIZE:40x20|CLICK:<esc> cancel|WAITUI:world|r|\x15|mouse-renamed|CLICK:<CR> rename|WAITFILE:" + filepath.Join(root, "hello", "mouse-renamed.gpg") + "|WAITUI:mouse-renamed|q")
+	if err := p.Rename(context.Background(), vault.Node{Path: vault.Path{"hello", "mouse-renamed"}, Kind: vault.EntryNode}, "world"); err != nil {
+		t.Fatal(err)
+	}
+	drive("l|WAITUI:world|d|WAITUI:Delete entry|CLICK:<esc> cancel|WAITUI:world|q")
+	drive("t|WAITUI:Theme|CLICK:/ filter|nord|WAITUI:nord (built-in)|CLICK:nord (built-in)|WAITUI:Theme|DOUBLE:nord (built-in)|WAITUI:Vault|q")
+	if err := p.Create(context.Background(), vault.Entry{Path: vault.Path{"hello", "mouse-delete"}, Password: "public-mouse-fixture"}); err != nil {
+		t.Fatal(err)
+	}
+	drive("l|WAITUI:mouse-delete|CLICK:mouse-delete|d|WAITUI:Delete entry|CLICK:y yes|WAITABSENT:" + filepath.Join(root, "hello", "mouse-delete.gpg") + "|q")
+	for i := 0; i < 8; i++ {
+		if err := p.CreateFolder(context.Background(), vault.Path{fmt.Sprintf("mouse-folder-%02d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	drive("a|WAITUI:Login|DOUBLE:Login|WAITUI:Destination|WHEEL:down:hello/|WHEEL:down:hello/|DOUBLE:mouse-folder-01/|WAITUI:mouse-folder-01/|\x1b|q")
+	for i := 0; i < 8; i++ {
+		if err := p.DeleteFolder(context.Background(), vault.Path{fmt.Sprintf("mouse-folder-%02d", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	drive("l|WAITUI:world|\r|WAITUI:Copied to clipboard|e|WAITUI:Password:|\x15|public-tui-edited|\r|WAITTEXT:hello/world=public-tui-edited|WAITUI:Stored in vault|q")
 	entry, err = p.Read(context.Background(), vault.Path{"hello", "world"})
 	if err != nil || entry.Password != "public-tui-edited" {
@@ -335,7 +383,7 @@ os.close(master);os.close(slave)
 		t.Fatal(err)
 	}
 	drive("l|WAITUI:world|C|WAITUI:Copied to clipboard|CHECKOTP|e|WAITUI:Authenticator|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:40x20|ABSENT:JBSWY3DPEHPK3PXP|RESIZE:84x24|\x1b|q")
-	drive("l|WAITUI:world|y|p|WAITUI:Paste conflict|r|\x15|world-copy|\r|WAITFILE:" + filepath.Join(root, "hello", "world-copy.gpg") + "|WAITUI:Pasted 1 item|q")
+	drive("l|WAITUI:world|y|p|WAITUI:Paste conflict|CLICK:r rename|\x15|world-copy|CLICK:<CR> continue|WAITFILE:" + filepath.Join(root, "hello", "world-copy.gpg") + "|WAITUI:Pasted 1 item|q")
 	drive("l|WAITUI:world|r|WAITUI:Name|\x15|world-renamed|\r|WAITFILE:" + filepath.Join(root, "hello", "world-renamed.gpg") + "|WAITUI:Renamed in vault|q")
 	if err := p.Rename(context.Background(), vault.Node{Path: vault.Path{"hello", "world-renamed"}, Kind: vault.EntryNode}, "world"); err != nil {
 		t.Fatal(err)
@@ -373,7 +421,7 @@ os.close(master);os.close(slave)
 	if err != nil {
 		t.Fatal(err)
 	}
-	drive("a|WAITUI:Import authenticators|/|Import|\r|WAITUI:Collect export|" + imagePath + "|\r|WAITUI:Review accounts|r|WAITUI:Entry name|\x15|discarded|\x1b|WAITUI:Review accounts|ABSENT:discarded|\r|WAITUI:Use this location|\x1b|WAITUI:Review accounts|\r|WAITUI:Use this location|\r|WAITUI:Imported|\r|WAITUI:Authenticators imported|q")
+	drive("a|WAITUI:Import authenticators|/|Import|\r|WAITUI:Collect export|" + imagePath + "|CLICK:<CR> next|WAITUI:Review accounts|DOUBLE:Example - alice|DOUBLE:Example - alice|CLICK:r rename|WAITUI:Entry name|\x15|discarded|CLICK:<esc> back|WAITUI:Review accounts|ABSENT:discarded|CLICK:<CR> next|WAITUI:Use this location|CLICK:<esc> back|WAITUI:Review accounts|CLICK:<CR> next|WAITUI:Use this location|RESIZE:50x24|DOUBLE:Use this location|WAITUI:Imported|CLICK:<CR> finish|WAITUI:Example - alice|q")
 	imported, err := p.Read(context.Background(), vault.Path{"Example - alice"})
 	if err != nil || imported.Password != "" || imported.Authenticator == "" {
 		t.Fatal("PTY bulk import did not create encrypted authenticator")
@@ -381,6 +429,8 @@ os.close(master);os.close(slave)
 	if err := p.Delete(context.Background(), vault.Path{"Example - alice"}); err != nil {
 		t.Fatal(err)
 	}
+	qrExportPath := filepath.Join(home, "mouse-export.png")
+	drive("l|WAITUI:world|e|WAITUI:Authenticator|RAW:\t|RAW:\t|RAW:\t|RAW:\t|RAW:\x1bOQ|WAITUI:Import authenticator QR image|CLICK:<esc> back|RAW:\x1bOR|WAITUI:Authenticator QR|RESIZE:50x24|CLICK:s export PNG|WAITUI:Export PNG|" + qrExportPath + "|CLICK:<CR> export|WAITFILE:" + qrExportPath + "|CLICK:<esc> back|\x1b|q")
 	drive("l|WAITUI:world|d|WAITUI:Delete entry|n|d|WAITUI:Delete entry|y|WAITABSENT:" + filepath.Join(root, "hello", "world.gpg") + "|WAITUI:Deleted from vault|q")
 	if nodes, err := p.List(context.Background(), vault.Path{"hello"}); err != nil || len(nodes) != 0 {
 		t.Fatalf("TUI delete/parent preservation: %v %v", nodes, err)

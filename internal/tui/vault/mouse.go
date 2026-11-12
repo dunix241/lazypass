@@ -14,6 +14,16 @@ func (s *View) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, fr
 		return shared.MouseResult{Consumed: true, Capture: true}
 	}
 	if s.IsTransferActive() {
+		if s.transfer.ownershipDialog != nil {
+			s.transfer.ownershipDialog.HandleMouse(action, event, frame)
+			return shared.MouseResult{Consumed: true, Capture: true}
+		}
+		if s.transfer.conflict && action == tview.MouseLeftClick {
+			r := shared.CenteredPanel(frame.Viewport, min(64, max(0, frame.Viewport.W-2)), 8)
+			if item, ok := popupActionAt(r, s.conflictActions(), event); ok {
+				s.handleTransferKey(item.Key)
+			}
+		}
 		if s.renameTarget != nil && action == tview.MouseLeftClick {
 			r := shared.CenteredPanel(frame.Viewport, min(64, max(0, frame.Viewport.W-2)), 7)
 			x, y := event.Position()

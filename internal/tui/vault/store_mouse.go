@@ -10,6 +10,19 @@ import (
 func (s *StoreForm) HandleMouse(action tview.MouseAction, event *tcell.EventMouse, frame shared.Frame) shared.MouseResult {
 	consume := shared.MouseResult{Consumed: true, Capture: true}
 	if s.bulk != nil {
+		s.handleBulkMouse(action, event, frame)
+		return consume
+	}
+	if s.qrImage != nil || s.qrImport {
+		if action == tview.MouseLeftClick {
+			r, _ := s.storeFormRect(frame.Viewport)
+			if s.qrImage != nil {
+				r = s.qrDisplayRect(frame.Viewport)
+			}
+			if item, ok := popupActionAt(r, s.qrActions(), event); ok {
+				s.HandleKey(item.Key)
+			}
+		}
 		return consume
 	}
 	if s.loadingEntries || s.saving || s.storeMessage != "" {
@@ -37,9 +50,6 @@ func (s *StoreForm) HandleMouse(action tview.MouseAction, event *tcell.EventMous
 				}
 			}
 		}
-		return consume
-	}
-	if s.qrImport || s.qrImage != nil {
 		return consume
 	}
 	if s.editingValue {

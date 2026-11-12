@@ -3,10 +3,12 @@ package filetransfer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"lazypass/internal/vault"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestRecursiveTransferAndInvalidDestinations(t *testing.T) {
@@ -60,6 +62,62 @@ func TestRecursiveTransferAndInvalidDestinations(t *testing.T) {
 	}
 	if _, err := Inspect(ctx, r, "moved", "other", ".age"); !errors.Is(err, vault.ErrUnsupported) {
 		t.Fatal("unknown file silently accepted")
+	}
+}
+
+func TestCancelActiveRecursiveTransfer(t *testing.T) {
+	for _, move := range []bool{false, true} {
+		t.Run(fmt.Sprintf("move=%t", move), func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Mkdir(filepath.Join(dir, "source"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			const count = 300
+			for i := 0; i < count; i++ {
+				if err := os.WriteFile(filepath.Join(dir, "source", fmt.Sprintf("%03d.age", i)), make([]byte, 4096), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			r, err := os.OpenRoot(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			tree, err := Inspect(context.Background(), r, "source", "target", ".age")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- ExecuteTree(ctx, r, "source", "target", tree, move) }()
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if _, err := os.Stat(filepath.Join(dir, "target", tree.Files[0])); err == nil {
+					break
+				}
+				select {
+				case err := <-done:
+					t.Fatalf("transfer finished before active cancellation: %v", err)
+				default:
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("transfer did not start")
+				}
+				time.Sleep(100 * time.Microsecond)
+			}
+			cancel()
+			if err := <-done; !errors.Is(err, context.Canceled) {
+				t.Fatalf("active cancel: %v", err)
+			}
+			if _, err := r.Stat("target"); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("partial destination remains")
+			}
+			entries, err := os.ReadDir(filepath.Join(dir, "source"))
+			if err != nil || len(entries) != count {
+				t.Fatal("active cancellation removed source files")
+			}
+		})
 	}
 }
 

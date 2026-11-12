@@ -32,6 +32,8 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
+	recoveryBusy          bool
+	recoveryStatus        string
 	compactSaveGeneration atomic.Uint64
 	keybindings           keybindingsState
 	vaultPickerViewport   shared.ListViewport

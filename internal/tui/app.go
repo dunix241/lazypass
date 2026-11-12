@@ -150,6 +150,7 @@ func (a *App) Run() error {
 func (s *screen) scheduleTasks(jobs *task.Scheduler) error {
 	path := s.cfgPath
 	tasks := []task.Task{
+		s.transferRecoveryTask(),
 		{ID: "authenticator display", Interval: time.Second, Run: func(ctx context.Context) error {
 			s.dispatch(ctx, func() {
 				if s.vault == nil {

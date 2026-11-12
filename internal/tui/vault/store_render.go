@@ -34,11 +34,7 @@ func (s *StoreForm) Draw(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintAt(screen, r.X+2, r.Y+4, "PNG/JPEG file path:", colors.Muted)
 		_, editor, options := s.activeInput()
 		editor.Draw(screen, r.X+2, r.Y+5, r.W-4, 1, tcell.StyleDefault.Foreground(colors.Text).Background(colors.Surface), !s.saving, options)
-		hint := shared.FitHints(r.W-4, "Enter file  •  Ctrl-V image  •  Esc back", "Ctrl-V image  •  Esc back")
-		if s.saving {
-			hint = "Importing…  •  Esc cancel"
-		}
-		shared.PrintPanelFooter(screen, r, hint, colors.Muted)
+		drawPopupActions(screen, r, s.qrActions(), colors.Muted)
 		return
 	}
 	if s.locationOnly && s.deps.LocationLabel != nil {

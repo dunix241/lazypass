@@ -81,13 +81,13 @@ func (s *StoreForm) exportQR() {
 func (s *StoreForm) drawQRDisplay(screen tcell.Screen, frame shared.Frame) {
 	b := s.qrImage.Bounds()
 	w, h := b.Dx()+4, (b.Dy()+1)/2+4
-	r := shared.CenteredPanel(frame.Viewport, min(w, frame.Viewport.W-2), min(h, frame.Viewport.H-2))
+	r := s.qrDisplayRect(frame.Viewport)
 	shared.Panel{Bounds: r, Title: "Authenticator QR", TitleColor: frame.Palette.Accent, Border: frame.Palette.Focus, Background: frame.Palette.Surface}.Draw(screen, nil)
 	if s.qrExport {
 		shared.PrintAt(screen, r.X+2, r.Y+2, "Export PNG to a new file:", frame.Palette.Text)
 		_, editor, options := s.activeInput()
 		editor.Draw(screen, r.X+2, r.Y+3, r.W-4, 1, tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Surface), !s.saving, options)
-		shared.PrintPanelFooter(screen, r, "Enter export  •  Esc back", frame.Palette.Muted)
+		drawPopupActions(screen, r, s.qrActions(), frame.Palette.Muted)
 		return
 	}
 	if r.W < w || r.H < h {
@@ -108,7 +108,12 @@ func (s *StoreForm) drawQRDisplay(screen tcell.Screen, frame shared.Frame) {
 			}
 		}
 	}
-	shared.PrintPanelFooter(screen, r, "s export PNG  •  Esc back", frame.Palette.Muted)
+	drawPopupActions(screen, r, s.qrActions(), frame.Palette.Muted)
+}
+
+func (s *StoreForm) qrDisplayRect(viewport shared.Rect) shared.Rect {
+	b := s.qrImage.Bounds()
+	return shared.CenteredPanel(viewport, min(b.Dx()+4, viewport.W-2), min((b.Dy()+1)/2+4, viewport.H-2))
 }
 
 func qrModuleColor(img image.Image, x, y int) tcell.Color {

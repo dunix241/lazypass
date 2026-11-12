@@ -13,18 +13,20 @@ import (
 )
 
 type transferState struct {
-	nodes       []vault.Node
-	move        bool
-	busy        bool
-	conflict    bool
-	rename      bool
-	editor      input.Editor
-	destination vault.Path
-	index       int
-	names       []string
-	skipped     map[int]bool
-	cancel      context.CancelFunc
-	blocked     bool
+	ownershipDialog *shared.Confirmation
+	ownershipChange bool
+	nodes           []vault.Node
+	move            bool
+	busy            bool
+	conflict        bool
+	rename          bool
+	editor          input.Editor
+	destination     vault.Path
+	index           int
+	names           []string
+	skipped         map[int]bool
+	cancel          context.CancelFunc
+	blocked         bool
 }
 
 func (s *View) HasStagedTransfers() bool { return len(s.transfer.nodes) > 0 }
@@ -32,6 +34,7 @@ func (s *View) HasStagedTransfers() bool { return len(s.transfer.nodes) > 0 }
 func (s *View) ClearStagedTransfers() { s.transfer.nodes = nil }
 
 func (s *View) CancelTransfer() {
+	s.transfer.ownershipDialog = nil
 	s.renameTarget = nil
 	if s.transfer.cancel != nil {
 		s.transfer.cancel()
@@ -88,8 +91,15 @@ func (s *View) stageTransfer(move bool) {
 	// A staged folder owns its descendants, even when they were staged earlier
 	// from search results or another location.
 	staged := nodes
+	hierarchy, providerHierarchy := s.vault.Provider.(vault.TransferHierarchy)
 	nodes = slices.DeleteFunc(slices.Clone(nodes), func(node vault.Node) bool {
 		for _, parent := range staged {
+			if providerHierarchy {
+				if hierarchy.TransferContains(parent, node) {
+					return true
+				}
+				continue
+			}
 			if parent.Kind == vault.FolderNode && strings.HasPrefix(node.Path.String(), parent.Path.String()+"/") {
 				return true
 			}
@@ -118,6 +128,7 @@ func (s *View) pasteEntries() {
 		t.names[i] = node.Name
 	}
 	t.index = 0
+	t.ownershipChange = false
 	t.skipped = map[int]bool{}
 	s.checkPaste()
 }
@@ -149,6 +160,13 @@ func (s *View) checkPaste() {
 			if err := s.transferNode(ctx, t.nodes[t.index], t.destination, t.names[t.index], t.move, true); err != nil {
 				return err
 			}
+			if inspector, ok := s.vault.Provider.(vault.OwnershipTransferInspector); ok && t.nodes[t.index].Kind == vault.EntryNode {
+				changed, err := inspector.ChangesOwnership(ctx, t.nodes[t.index].Path, t.destination, t.move)
+				if err != nil {
+					return err
+				}
+				t.ownershipChange = t.ownershipChange || changed
+			}
 		}
 		return nil
 	}, func(err error) {
@@ -167,6 +185,10 @@ func (s *View) checkPaste() {
 		}
 		if err != nil {
 			s.notify(shared.Error, storeErrorMessage(err))
+			return
+		}
+		if t.ownershipChange {
+			t.ownershipDialog = shared.NewConfirmation(shared.ConfirmationOptions{Title: "Transfer ownership", Message: "Pasting these personal items transfers ownership to the destination organization. Moving them back to personal ownership is not supported.", ConfirmLabel: "transfer", OnConfirm: func() { t.ownershipDialog = nil; s.executePaste() }, OnCancel: func() { t.ownershipDialog = nil }})
 			return
 		}
 		s.executePaste()
@@ -251,6 +273,10 @@ func pasteSummary(count int) string {
 }
 
 func (s *View) handleTransferKey(event *tcell.EventKey) {
+	if s.transfer.ownershipDialog != nil {
+		s.transfer.ownershipDialog.HandleKey(event)
+		return
+	}
 	if s.renameTarget != nil {
 		s.handleRenameKey(event)
 		return
@@ -294,6 +320,10 @@ func (s *View) handleTransferKey(event *tcell.EventKey) {
 }
 
 func (s *View) drawTransfer(screen tcell.Screen, frame shared.Frame) {
+	if s.transfer.ownershipDialog != nil {
+		s.transfer.ownershipDialog.Draw(screen, frame)
+		return
+	}
 	if s.renameTarget != nil {
 		s.drawRename(screen, frame)
 		return
@@ -308,10 +338,8 @@ func (s *View) drawTransfer(screen tcell.Screen, frame shared.Frame) {
 		shared.PrintAt(screen, content.X, content.Y, shared.Truncate(t.names[t.index]+" already exists at destination", content.W), frame.Palette.Text)
 		if t.rename {
 			t.editor.Draw(screen, content.X, content.Y+2, content.W, 1, tcell.StyleDefault.Foreground(frame.Palette.Text).Background(frame.Palette.Surface), true, input.Options{MaxBytes: 255})
-			shared.PrintAt(screen, content.X, content.Y+4, "<CR> continue  •  <esc> cancel", frame.Palette.Muted)
-		} else {
-			shared.PrintAt(screen, content.X, content.Y+3, "r rename  •  s skip  •  <esc> cancel", frame.Palette.Muted)
 		}
+		drawPopupActions(screen, r, s.conflictActions(), frame.Palette.Muted)
 	})
 }
 

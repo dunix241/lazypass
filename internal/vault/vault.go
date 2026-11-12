@@ -247,6 +247,24 @@ type FolderTransfer interface {
 	TransferFolder(context.Context, Path, Path, string, bool) error
 }
 
+// TransferHierarchy uses provider metadata to identify logical descendants when
+// browser paths contain independent remote IDs rather than directory components.
+type TransferHierarchy interface {
+	TransferContains(Node, Node) bool
+}
+
+type OwnershipTransferInspector interface {
+	ChangesOwnership(context.Context, Path, Path, bool) (bool, error)
+}
+
+type TransferRecoveryResult struct {
+	Completed, Pending, Failed int
+}
+
+type TransferRecoveryProvider interface {
+	RecoverTransfers(context.Context) (TransferRecoveryResult, error)
+}
+
 type Renamer interface {
 	Rename(context.Context, Node, string) error
 }

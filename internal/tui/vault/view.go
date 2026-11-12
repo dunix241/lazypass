@@ -77,7 +77,7 @@ func (s *View) CancelCopy() {
 func (s *View) IsConfirmingDelete() bool { return s.deleteTarget != nil }
 
 func (s *View) IsTransferActive() bool {
-	return s.transfer.busy || s.transfer.conflict || s.renameTarget != nil
+	return s.transfer.busy || s.transfer.conflict || s.transfer.ownershipDialog != nil || s.renameTarget != nil
 }
 
 func New(deps Dependencies) *View { return &View{vault: deps.Service, deps: deps} }

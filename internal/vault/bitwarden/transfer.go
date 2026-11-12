@@ -31,9 +31,6 @@ func (s snapshot) checkTransfer(source, destination vault.Path, name string, mov
 			return entry, target, err
 		}
 		// Folder placement is account-local and does not change ownership.
-		if !move && entry.OrganizationID != "" {
-			return entry, target, vault.ErrUnsupported
-		}
 		if move && entry.FolderID == target.folderID {
 			return entry, target, vault.ErrConflict
 		}
@@ -45,10 +42,13 @@ func (s snapshot) checkTransfer(source, destination vault.Path, name string, mov
 		if deniedCollection(target.collection) {
 			return entry, target, permissionDenied("paste into")
 		}
-		if entry.OrganizationID != target.collection.OrganizationID {
+		if move && entry.OrganizationID != "" && entry.OrganizationID != target.collection.OrganizationID {
 			return entry, target, vault.ErrUnsupported
 		}
-		if move {
+		if move && entry.OrganizationID == "" && name != entry.Name {
+			return entry, target, &commandFailure{vault.ErrUnsupported, "Rename the personal item before transferring ownership"}
+		}
+		if move && entry.OrganizationID != "" {
 			// Move only the membership represented by the source browser location.
 			if len(source) != 4 || source[0] != "Organizations" || name != entry.Name {
 				return entry, target, vault.ErrUnsupported
@@ -114,12 +114,8 @@ func (p *Provider) transferItem(ctx context.Context, id string, copying bool) (m
 		if denied(hidden) {
 			return nil, permissionDenied("copy")
 		}
-		var attachments []json.RawMessage
-		if value := raw["attachments"]; len(value) > 0 && json.Unmarshal(value, &attachments) != nil {
-			return nil, vault.ErrMalformed
-		}
-		if len(attachments) > 0 {
-			return nil, &commandFailure{vault.ErrUnsupported, "Copying entries with attachments is not supported"}
+		if _, err := cloneAttachments(raw); err != nil {
+			return nil, err
 		}
 	}
 	return raw, nil
@@ -138,6 +134,11 @@ func (p *Provider) Transfer(ctx context.Context, source, destination vault.Path,
 		return err
 	}
 	if move && target.collection.ID != "" {
+		if entry.OrganizationID == "" {
+			output, err := p.submit(ctx, []string{"move", entry.ID, target.collection.OrganizationID}, []string{target.collection.ID})
+			clear(output)
+			return err
+		}
 		ids := slices.Clone(entry.CollectionIDs)
 		ids = slices.DeleteFunc(ids, func(id string) bool { return id == source[2] })
 		ids = append(ids, target.collection.ID)
@@ -150,16 +151,18 @@ func (p *Provider) Transfer(ctx context.Context, source, destination vault.Path,
 		return err
 	}
 	if !move {
-		for _, field := range []string{"id", "object", "revisionDate", "creationDate", "deletedDate", "attachments"} {
-			delete(raw, field)
-		}
 		raw["name"], _ = json.Marshal(name)
 		if target.collection.ID != "" {
+			raw["organizationId"], _ = json.Marshal(target.collection.OrganizationID)
 			raw["collectionIds"], _ = json.Marshal([]string{target.collection.ID})
 			raw["folderId"] = json.RawMessage("null")
 		}
 	}
 	if target.collection.ID == "" {
+		if !move {
+			raw["organizationId"] = json.RawMessage("null")
+			raw["collectionIds"] = json.RawMessage("[]")
+		}
 		raw["name"], _ = json.Marshal(name)
 		if target.folderID == "" {
 			raw["folderId"] = json.RawMessage("null")
@@ -167,11 +170,10 @@ func (p *Provider) Transfer(ctx context.Context, source, destination vault.Path,
 			raw["folderId"], _ = json.Marshal(target.folderID)
 		}
 	}
-	args := []string{"create", "item"}
-	if move {
-		args = []string{"edit", "item", entry.ID}
+	if !move {
+		return p.cloneItem(ctx, entry.ID, raw)
 	}
-	result, err := p.submit(ctx, args, raw)
+	result, err := p.submit(ctx, []string{"edit", "item", entry.ID}, raw)
 	clear(result)
 	return err
 }

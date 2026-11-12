@@ -57,6 +57,33 @@ func TestNativeTransferPreservesFullItemAndMoveIdentity(t *testing.T) {
 	}
 }
 
+func TestTransferInfersOwnershipFromDestination(t *testing.T) {
+	s := snapshot{
+		folders:       []folder{{ID: "folder", Name: "Personal"}},
+		items:         []item{{ID: "personal", Name: "Fixture", Type: 1, FolderID: "folder"}},
+		organizations: []organization{{ID: "org"}, {ID: "other"}},
+		collections:   []collection{{ID: "collection", OrganizationID: "org", Name: "Collection"}, {ID: "target", OrganizationID: "other", Name: "Target"}},
+		excluded:      []item{{ID: "shared", Name: "Shared", Type: 1, OrganizationID: "org", CollectionIDs: []string{"collection"}}},
+	}
+	s.indexOrganizations()
+	personal := vault.Path{"Folders", "folder", "personal"}
+	shared := vault.Path{"Organizations", "org", "collection", "shared"}
+	for _, move := range []bool{false, true} {
+		if _, _, err := s.checkTransfer(personal, vault.Path{"Organizations", "org", "collection"}, "Fixture", move); err != nil {
+			t.Fatalf("personal to organization: %v", err)
+		}
+	}
+	if _, _, err := s.checkTransfer(shared, vault.Path{"Folders", "folder"}, "Shared copy", false); err != nil {
+		t.Fatal("organization to personal copy rejected", err)
+	}
+	if _, _, err := s.checkTransfer(shared, vault.Path{"Organizations", "other", "target"}, "Shared copy", false); err != nil {
+		t.Fatal("cross-organization copy rejected", err)
+	}
+	if _, _, err := s.checkTransfer(shared, vault.Path{"Organizations", "other", "target"}, "Shared", true); err == nil {
+		t.Fatal("unsupported cross-organization move accepted")
+	}
+}
+
 func TestCollectionMovePreservesOtherMembershipsAndOwnership(t *testing.T) {
 	s := snapshot{organizations: []organization{{ID: "org"}}, collections: []collection{{ID: "a", OrganizationID: "org"}, {ID: "b", OrganizationID: "org"}, {ID: "c", OrganizationID: "org"}}, excluded: []item{{ID: "source", Name: "Original", Type: 1, OrganizationID: "org", CollectionIDs: []string{"a", "c"}}}}
 	s.indexOrganizations()

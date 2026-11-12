@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/gdamore/tcell/v2"
+	"lazypass/internal/tui/shared"
 	"lazypass/internal/vault"
 	"lazypass/internal/vault/service"
 	"testing"
@@ -15,6 +16,47 @@ type transferProvider struct {
 	fail        string
 	transferred []string
 	move        bool
+}
+
+func TestCanceledPastePreflightCannotStartMutation(t *testing.T) {
+	nodes := []vault.Node{{Name: "fixture", Path: vault.Path{"fixture"}, Kind: vault.EntryNode}}
+	p := &transferProvider{memoryVault: memoryVault{nodes: map[string][]vault.Node{"": nodes}}}
+	var work func(context.Context) error
+	var done func(error)
+	v := New(Dependencies{Service: service.Service{Provider: p}, RunOperation: func(fn func(context.Context) error, finish func(error)) { work, done = fn, finish }})
+	v.vaultNodes = nodes
+	v.stageTransfer(false)
+	v.pasteEntries()
+	v.CancelTransfer()
+	if err := work(context.Background()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("preflight ignored cancellation: %v", err)
+	}
+	done(nil)
+	if len(p.transferred) != 0 || v.transfer.busy || v.transfer.conflict {
+		t.Fatal("late preflight started mutation or reopened dialog")
+	}
+}
+
+func TestCanceledCutRecordsSuccessWithoutLateNotification(t *testing.T) {
+	nodes := []vault.Node{{Name: "fixture", Path: vault.Path{"fixture"}, Kind: vault.EntryNode}}
+	p := &transferProvider{memoryVault: memoryVault{nodes: map[string][]vault.Node{"": nodes}}}
+	var finish func(error)
+	notifications := 0
+	v := New(Dependencies{Service: service.Service{Provider: p}, Notify: func(shared.Level, string) { notifications++ }})
+	v.transfer = transferState{nodes: nodes, names: []string{"fixture"}, move: true}
+	v.deps.RunOperation = func(work func(context.Context) error, done func(error)) {
+		if err := work(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		finish = done
+	}
+	v.executePaste()
+	v.CancelTransfer()
+	before := notifications
+	finish(nil)
+	if len(p.transferred) != 1 || v.HasStagedTransfers() || v.transfer.busy || notifications != before {
+		t.Fatal("late cut completion lost success accounting or leaked UI updates")
+	}
 }
 
 type folderTransferProvider struct{ transferProvider }
