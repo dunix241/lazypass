@@ -46,6 +46,9 @@ type App struct {
 
 func NewApp(cfg config.Config, cfgPath string, onCopy func(string) error, options ...Option) *App {
 	s := &screen{Box: tview.NewBox(), cfg: cfg, cfgPath: cfgPath, colors: shared.DefaultPalette()}
+	messages := cfg.Messages.Resolved()
+	s.notifications.SetSlots(messages.Notifications.Slots)
+	s.statuses.SetSlots(messages.Status.Slots)
 	if palette, err := theme.Load(cfg.Theme); err == nil {
 		if loaded, err := shared.NewPalette(palette); err == nil {
 			s.colors = loaded

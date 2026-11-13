@@ -25,7 +25,7 @@ func (s *View) FooterActions() shared.Footer {
 		return shared.Footer{Actions: s.renameActions()}
 	}
 	if s.IsTransferActive() {
-		return shared.Footer{Actions: []shared.Action{{Hint: "esc", Label: "cancel paste", Key: tcell.NewEventKey(tcell.KeyEscape, 0, 0), Priority: shared.Essential}}}
+		return shared.Footer{Actions: []shared.Action{{Hint: "<esc>", Label: "cancel", Key: tcell.NewEventKey(tcell.KeyEscape, 0, 0), Priority: shared.Essential}}}
 	}
 	mark, remove := "mark", "remove"
 	if len(s.marks) > 0 {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"lazypass/internal/tui/shared"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -12,7 +13,7 @@ func (s *screen) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(
 		x, y := event.Position()
 		if action == tview.MouseLeftClick {
 			for i, bounds := range s.notificationBounds {
-				if bounds.Contains(x, y) && s.activateNotification(i) {
+				if bounds.Contains(x, y) && i < len(s.notificationMessages) && s.notifications.ActivateMessage(s.notificationMessages[i], 0, time.Now()) {
 					return true, nil
 				}
 			}

@@ -46,3 +46,18 @@ func TestReconcileReportsSavedButRefreshFailed(t *testing.T) {
 		t.Fatalf("incorrect outcome: %v %s", level, text)
 	}
 }
+
+func TestReconcileAfterFailedEarlyUnlockCompletes(t *testing.T) {
+	p := &memoryVault{nodes: map[string][]vault.Node{"": {{Name: "renamed", Path: vault.Path{"renamed"}, Kind: vault.FolderNode}}}}
+	var message string
+	v := New(Dependencies{Service: service.Service{Provider: p}, Notify: func(_ shared.Level, text string) { message = text }})
+	v.BrowseCached()
+	if !v.awaitingUnlock {
+		t.Fatal("early unlock state missing")
+	}
+	v.AuthenticationFailed()
+	v.Reconcile("Renamed in vault")
+	if message != "Renamed in vault" || v.refreshCompletion != nil || v.refreshing || len(v.vaultNodes) != 1 {
+		t.Fatal("failed early unlock left reconciliation stuck")
+	}
+}

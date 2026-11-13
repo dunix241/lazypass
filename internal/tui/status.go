@@ -29,12 +29,40 @@ func (s *screen) notify(level notificationLevel, text string) {
 }
 
 func (s *screen) notifyWithDuration(level notificationLevel, text string, duration time.Duration) {
+	now := time.Now()
+	if duration < 0 {
+		s.statuses.Show(notification.Message{ID: "operation", Text: text, Level: level, Duration: -1}, now)
+		return
+	}
 	minimum := 3 * time.Second
 	if level == shared.Warning || level == shared.Error {
 		minimum = 8 * time.Second
 	}
-	s.notifications.Show(notification.Message{ID: "operation", Text: text, Level: level, Duration: duration,
-		DurationMode: notification.DynamicDuration, ReadingTime: &notification.ReadingTime{Minimum: minimum}}, time.Now())
+	s.notifications.Show(notification.Message{Text: text, Level: level, Duration: duration,
+		DurationMode: notification.DynamicDuration, ReadingTime: &notification.ReadingTime{Minimum: minimum}}, now)
+}
+
+func (s *screen) drawOperationStatuses(screen tcell.Screen, x, y, width, height, footerRows int) {
+	settings := s.cfg.Messages.Resolved().Status
+	messages := s.statuses.Visible()
+	for i, message := range messages {
+		text := shared.Truncate(message.Text, max(0, width-4))
+		left := x + 2
+		if strings.HasSuffix(settings.Position, "Right") {
+			left = x + width - 2 - uniseg.StringWidth(text)
+		}
+		logo := calculateLogoLayout(width, height)
+		row := y + logo.y + logo.h + i
+		if strings.HasPrefix(settings.Position, "bottom") {
+			row = y + height - footerRows - len(messages) + i
+			if strings.HasPrefix(s.cfg.Messages.Resolved().Notifications.Position, "bottom") {
+				row -= s.notificationRows(width, height)
+			}
+		} else if strings.HasPrefix(s.cfg.Messages.Resolved().Notifications.Position, "top") {
+			row += s.notificationRows(width, height)
+		}
+		shared.PrintAt(screen, left, row, text, s.colors.Muted)
+	}
 }
 
 func (s *screen) notifyRecovery(text, command string) {
@@ -64,22 +92,36 @@ func (s *screen) notifyRecovery(text, command string) {
 
 func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, width int) {
 	s.notificationBounds = nil
+	s.notificationMessages = nil
 	s.drawnNotification = nil
-	message := s.notifications.Current()
-	if message == nil {
-		return
+	messages := s.notifications.Visible()
+	rowOffset := 0
+	for _, message := range messages {
+		rowOffset += s.drawNotification(screen, logo, x, y+rowOffset, width, message)
 	}
-	available, offset, alignRight := notificationSpace(logo, width)
+}
+
+func (s *screen) drawNotification(screen tcell.Screen, logo logoLayout, x, y, width int, message *notification.Message) int {
+	available, offset := s.messageSpace(logo, width)
 	start := x + offset
 	if available <= 0 {
-		return
+		return 0
 	}
 	fallback := tcell.StyleDefault.Foreground(s.notificationColor(message.Level)).Background(s.colors.Base).Bold(true)
 	presentation := notification.Format(*message, fallback)
 	_, _, _, height := s.GetRect()
 	lines := notificationLines(presentation.Text, available, height)
 	if len(lines) == 0 {
-		return
+		return 0
+	}
+	position := s.cfg.Messages.Resolved().Notifications.Position
+	alignRight := strings.HasSuffix(position, "Right")
+	if !alignRight {
+		start = x + 2
+	}
+	if strings.HasPrefix(position, "bottom") {
+		_, baseY, _, h := s.GetRect()
+		y = baseY + h - len(s.footerRows(width)) - s.notificationRows(width, h) + (y - baseY)
 	}
 	if alignRight {
 		blockWidth := 0
@@ -93,6 +135,7 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 		shared.PrintStyled(screen, start, y+row, line, presentation.Style)
 		if len(message.Actions) > 0 {
 			s.notificationBounds = append(s.notificationBounds, shared.Rect{X: start, Y: y + row, W: textWidth, H: 1})
+			s.notificationMessages = append(s.notificationMessages, message)
 		}
 	}
 	if s.loggedNotification != message {
@@ -101,7 +144,10 @@ func (s *screen) drawHeaderStatus(screen tcell.Screen, logo logoLayout, x, y, wi
 			debug.Event("update notification rendered")
 		}
 	}
-	s.drawnNotification = message
+	if message == s.notifications.Current() {
+		s.drawnNotification = message
+	}
+	return len(lines)
 }
 
 func notificationSpace(logo logoLayout, width int) (available, offset int, alignRight bool) {
@@ -135,14 +181,26 @@ func notificationLines(text string, width, height int) []string {
 }
 
 func (s *screen) notificationRows(width, height int) int {
-	message := s.notifications.Current()
-	if message == nil {
-		return 0
-	}
 	logo := calculateLogoLayout(width, height)
-	available, _, _ := notificationSpace(logo, width)
-	presentation := notification.Format(*message, tcell.StyleDefault)
-	return len(notificationLines(presentation.Text, available, height))
+	available, _ := s.messageSpace(logo, width)
+	rows := 0
+	for _, message := range s.notifications.Visible() {
+		presentation := notification.Format(*message, tcell.StyleDefault)
+		rows += len(notificationLines(presentation.Text, available, height))
+	}
+	return rows
+}
+
+func (s *screen) messageSpace(logo logoLayout, width int) (int, int) {
+	position := s.cfg.Messages.Resolved().Notifications.Position
+	if strings.HasPrefix(position, "bottom") {
+		return max(0, min(64, width-4)), 2
+	}
+	if position == "topLeft" {
+		return max(0, logo.x-2), 2
+	}
+	available, offset, _ := notificationSpace(logo, width)
+	return available, offset
 }
 
 func (s *screen) activateNotification(index int) bool {

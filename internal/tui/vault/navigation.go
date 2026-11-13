@@ -25,6 +25,12 @@ func (s *View) Authenticated() {
 	s.Refresh()
 }
 
+// A failed early unlock must not keep later, independently authenticated
+// operations in cache-only browsing mode.
+func (s *View) AuthenticationFailed() {
+	s.awaitingUnlock = false
+}
+
 func (s *View) refresh(selectPath string) {
 	if s.cacheLoading {
 		return

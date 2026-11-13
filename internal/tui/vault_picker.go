@@ -15,6 +15,7 @@ import (
 func (s *screen) activateVault(index int) {
 	s.vaultActivation++
 	if s.vault != nil {
+		s.clearOperationStatuses()
 		s.vault.CancelMarkedDelete()
 		s.vault.CancelTransfer()
 		s.vault.ClearMarks()
@@ -29,12 +30,8 @@ func (s *screen) activateVault(index int) {
 			s.notify(level, message)
 		}
 	}
-	progress := func(message string) {
-		if s.vaultIndex == index {
-			s.notifyWithDuration(shared.Info, message, -1)
-		}
-	}
 	if s.vaultViews[index] == nil {
+		progress, run := s.statusOperationRunner(s.operationRunner(selected.Service.Provider), func() bool { return s.vaultIndex == index })
 		identity, _ := json.Marshal(struct {
 			ConfigPath, Name string
 			Vaults           any
@@ -51,7 +48,7 @@ func (s *screen) activateVault(index int) {
 			Name:         selected.Name,
 			Service:      selected.Service,
 			RunPrompted:  s.runPrompted,
-			RunOperation: s.operationRunner(selected.Service.Provider),
+			RunOperation: run,
 			Notify:       notify,
 			NotifyRecovery: func(message, command string) {
 				if s.vaultIndex == index {
@@ -65,16 +62,21 @@ func (s *screen) activateVault(index int) {
 		})
 	}
 	s.vault = s.vaultViews[index]
+	progress, run := s.statusOperationRunner(s.operationRunner(selected.Service.Provider), func() bool { return s.vaultIndex == index && s.overlay == storeOverlay })
 	s.store = vaultui.NewStoreForm(vaultui.StoreDependencies{
 		Progress:      progress,
 		Reconcile:     s.vault.Reconcile,
 		LocationLabel: s.vault.LocationLabel,
 		Service:       selected.Service,
 		Password:      s.generator.Password,
-		Notify:        notify,
-		Closed:        func() { s.overlay = noOverlay },
-		RunPrompted:   s.runPrompted,
-		RunOperation:  s.operationRunner(selected.Service.Provider),
+		Notify: func(level shared.Level, message string) {
+			if s.vaultIndex == index {
+				s.notify(level, message)
+			}
+		},
+		Closed:       func() { s.overlay = noOverlay },
+		RunPrompted:  s.runPrompted,
+		RunOperation: run,
 		Saved: func(vault.Path) {
 			if s.route == VaultRoute {
 				s.vault.Refresh()

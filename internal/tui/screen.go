@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -32,6 +33,9 @@ const (
 
 // screen is the single focused primitive and coordinates persistent child views.
 type screen struct {
+	statusSequence        uint64
+	notificationMessages  []*notification.Message
+	statuses              notification.Manager
 	recoveryBusy          bool
 	recoveryStatus        string
 	compactSaveGeneration atomic.Uint64
@@ -69,6 +73,9 @@ type screen struct {
 }
 
 func (s *screen) Draw(screen tcell.Screen) {
+	settings := s.cfg.Messages.Resolved()
+	s.notifications.SetSlots(settings.Notifications.Slots)
+	s.statuses.SetSlots(settings.Status.Slots)
 	screen.HideCursor()
 	s.notificationBounds = nil
 	s.drawnNotification = nil
@@ -97,6 +104,7 @@ func (s *screen) Draw(screen tcell.Screen) {
 	for i, row := range footerRows {
 		shared.PrintActionText(screen, shared.Rect{X: x + 1, Y: y + height - len(footerRows) + i, W: max(0, width-2), H: 1}, row, s.colors.Muted)
 	}
+	s.drawOperationStatuses(screen, x, y, width, height, len(footerRows))
 	if s.overlay != noOverlay || s.unlock != nil {
 		screen.HideCursor()
 	}
@@ -135,13 +143,24 @@ func (s *screen) frame() shared.Frame {
 
 func (s *screen) contentLayout(w, h int) layout {
 	l := calculateLayout(w, h)
-	if rows := s.notificationRows(w, h); rows > l.card.Y {
-		l.card.Y = rows
-		l.card.H = max(1, min(l.card.H, h-l.card.Y-1))
+	settings := s.cfg.Messages.Resolved()
+	notificationRows := s.notificationRows(w, h)
+	statusRows := len(s.statuses.Visible())
+	top, bottom := 0, 0
+	if strings.HasPrefix(settings.Notifications.Position, "top") {
+		top = notificationRows
+	} else {
+		bottom = notificationRows
 	}
+	if strings.HasPrefix(settings.Status.Position, "top") && statusRows > 0 {
+		logo := calculateLogoLayout(w, h)
+		top += logo.y + logo.h + statusRows
+	} else {
+		bottom += statusRows
+	}
+	l.card.Y = max(l.card.Y, top)
 	if s.vault != nil && s.generator != nil {
-		rows := s.footerRows(w)
-		l.card.H = min(l.card.H, max(1, h-l.card.Y-len(rows)))
+		l.card.H = min(l.card.H, max(1, h-l.card.Y-len(s.footerRows(w))-bottom))
 	}
 	return l
 }

@@ -66,6 +66,7 @@ func (s *screen) refreshVaultEarly() {
 			view.Authenticated()
 			return
 		}
+		view.AuthenticationFailed()
 		var diagnostic vault.Diagnostic
 		if errors.As(err, &diagnostic) {
 			var recovery vault.RecoveryCommand

@@ -19,20 +19,21 @@ import (
 
 // Config is the persisted form of generator.Options.
 type Config struct {
-	Compact          bool    `yaml:"compact"`
-	Updates          Updates `yaml:"updates"`
-	Version          int     `yaml:"version"`
-	Length           int     `yaml:"length"`
-	Upper            bool    `yaml:"upper"`
-	Lower            bool    `yaml:"lower"`
-	Numbers          bool    `yaml:"numbers"`
-	Symbols          bool    `yaml:"symbols"`
-	SymbolSet        string  `yaml:"symbolSet"`
-	ExcludeAmbiguous bool    `yaml:"excludeAmbiguous"`
-	Theme            string  `yaml:"theme"`
-	NerdFont         bool    `yaml:"nerdFont"`
-	Vaults           Vaults  `yaml:"vaults"`
-	LastVault        string  `yaml:"-"` // Legacy read-only migration value.
+	Messages         Messages `yaml:"messages"`
+	Compact          bool     `yaml:"compact"`
+	Updates          Updates  `yaml:"updates"`
+	Version          int      `yaml:"version"`
+	Length           int      `yaml:"length"`
+	Upper            bool     `yaml:"upper"`
+	Lower            bool     `yaml:"lower"`
+	Numbers          bool     `yaml:"numbers"`
+	Symbols          bool     `yaml:"symbols"`
+	SymbolSet        string   `yaml:"symbolSet"`
+	ExcludeAmbiguous bool     `yaml:"excludeAmbiguous"`
+	Theme            string   `yaml:"theme"`
+	NerdFont         bool     `yaml:"nerdFont"`
+	Vaults           Vaults   `yaml:"vaults"`
+	LastVault        string   `yaml:"-"` // Legacy read-only migration value.
 }
 
 func (c *Config) UnmarshalYAML(node *yaml.Node) error {
@@ -109,6 +110,7 @@ func (c Config) SelectedVault(name string) (Vault, bool) {
 func Defaults() Config {
 	d := generator.Defaults()
 	return Config{
+		Messages:         (Messages{}).Resolved(),
 		Updates:          defaultUpdates(),
 		Version:          1,
 		Length:           d.Length,
