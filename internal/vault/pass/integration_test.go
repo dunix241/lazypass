@@ -351,6 +351,16 @@ os.close(master);os.close(slave)
 	if err != nil || entry.Password != "public-tui-fixture" {
 		t.Fatalf("TUI add failed: %v", err)
 	}
+	for _, position := range []string{"topRight", "topLeft", "bottomRight", "bottomLeft"} {
+		body := fmt.Sprintf("updates:\n  mode: off\nmessages:\n  notifications:\n    position: %s\n    slots: 2\n  status:\n    position: %s\n    slots: 3\nvaults:\n  - name: fixture\n    provider: pass\n    storeDir: %s\n", position, position, root)
+		if err := os.WriteFile(config, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		drive("l|WAITUI:world|c|WAITUI:Copied to clipboard|c|WAITUI:Copied to clipboard|RESIZE:50x24|WAITUI:world|z|WAITUI:? keybindings|RESIZE:32x18|WAITUI:? keybindings|RESIZE:84x24|q")
+	}
+	if err := os.WriteFile(config, []byte("updates:\n  mode: off\nvaults:\n  - name: fixture\n    provider: pass\n    storeDir: "+root+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	drive("a|WAITUI:Login|/|no-result|WAITUI:No matching entry types|\x1b|RESIZE:40x20|CLICK:Login|WAITUI:Login|DOUBLE:Login|WAITUI:Destination|\x1b|q")
 	drive("l|WAITUI:world|r|WAITUI:Name|RESIZE:40x20|CLICK:<esc> cancel|WAITUI:world|r|\x15|mouse-renamed|CLICK:<CR> rename|WAITFILE:" + filepath.Join(root, "hello", "mouse-renamed.gpg") + "|WAITUI:mouse-renamed|q")
 	if err := p.Rename(context.Background(), vault.Node{Path: vault.Path{"hello", "mouse-renamed"}, Kind: vault.EntryNode}, "world"); err != nil {
